@@ -1,0 +1,8 @@
+前端：
+react
+react-router-dom(路由)
+
+
+后端：
+node.js(express框架，pg连接数据库)
+postgreSQL(数据库)
