@@ -1,31 +1,82 @@
-const express = require("express")
-const { Pool } = require('pg');
+const express = require("express");
+const { Pool } = require("pg");
 
 //连接数据库
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'WebDB',
-    password: '123456',
-    port: 5432,
+  user: "postgres",
+  host: "localhost",
+  database: "WebDB",
+  password: "23456",
+  port: 5432,
 });
 
-// //测试连接
-// pool.connect()
-//     .then(client => {
-//         console.log('成功连接到数据库');
-//         client.release(); // 释放客户端连接
-//     })
-//     .catch(err => console.error('连接失败', err));
+//测试连接
+pool
+  .connect()
+  .then((client) => {
+    console.log("成功连接到数据库");
+    client.release();
+  })
+  .catch((err) => console.error(err));
 
+// 执行查询并获取结果
+const fetchData = async () => {
+  const client = await pool.connect();
+  try {
+    const res = await client.query("SELECT * FROM user_info");
+    console.log("查询结果：", res.rows); // 打印查询结果
+  } catch (err) {
+    console.error(err);
+  } finally {
+    client.release(); // 释放客户端连接
+  }
+};
 
-const app = express()
+//插入数据
+const insertData = async () => {
+  const client = await pool.connect();
+  const insertQuery =
+    "INSERT INTO user_info (user_name, password) VALUES($1, $2) RETURNING *";
+  const values = ["hhy1", "123456"];
+
+  try {
+    const res = await client.query(insertQuery, values);
+    console.log("插入成功:", res.rows[0]);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    client.release();
+  }
+};
+
+// 删除数据
+const deleteData = async () => {
+  const client = await pool.connect();
+  const deleteQuery = "DELETE FROM user_info";
+
+  try {
+    const res = await client.query(deleteQuery);
+    console.log("删除成功：", res);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    client.release();
+  }
+};
+
+// deleteData();
+
+// insertData();
+
+// fetchData();
+
+const app = express();
 app.use(express.json());
 
-app.get("/", function(req, res) {
-  res.send("It's working!")
-})
+app.get("/", function (req, res) {
+  res.send("It's working!");
+});
 
 app.listen(3001, () => {
-  console.log("app listening on port 3001")
-})
+  console.log("app listening on port 3001");
+});
