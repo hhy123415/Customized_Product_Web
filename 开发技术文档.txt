@@ -1,8 +1,9 @@
 前端：
 react
 react-router-dom(路由)
+axios（处理http请求和响应）
 
 
 后端：
-node.js(express框架，pg连接数据库)
+node.js(express web框架，pg连接数据库，bcrypt加密，cors跨域请求)
 postgreSQL(数据库)
