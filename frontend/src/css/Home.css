@@ -183,3 +183,94 @@
   font-size: 14px;
   text-align: center;
 }
+
+/*商品卡片*/
+
+.nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 0.5fr));
+  gap: 2rem;
+  margin-top: 2rem;
+  margin-left: 20px;
+  margin-right: 20px
+}
+
+.nav-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.nav-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.image-container {
+  position: relative;
+  overflow: hidden;
+  height: 300px;
+}
+
+.image-container img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.nav-card:hover img {
+  transform: scale(1.05);
+}
+
+.nav-title {
+  padding: 1rem;
+  background-color: #f8f9fa;
+  margin: 0;
+}
+
+/* 错误状态样式 */
+.error-container {
+  text-align: center;
+  padding: 50px;
+}
+
+.error-text {
+  color: #e74c3c;
+  margin-bottom: 20px;
+}
+
+.retry-button {
+  padding: 10px 20px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.retry-button:hover {
+  background-color: #2980b9;
+}
+
+/* 空数据样式 */
+.empty-container {
+  text-align: center;
+  padding: 50px;
+  color: #7f8c8d;
+}
+
+/* 可选：卡片描述样式 */
+.nav-description {
+  color: #666;
+  font-size: 14px;
+  margin-top: 8px;
+  line-height: 1.4;
+}

@@ -21,64 +21,13 @@ pool
   })
   .catch((err) => console.error("数据库连接失败:", err));
 
-// // 执行查询并获取结果
-// const fetchData = async () => {
-//   const client = await pool.connect();
-//   try {
-//     const res = await client.query("SELECT * FROM user_info");
-//     console.log("查询结果：", res.rows); // 打印查询结果
-//   } catch (err) {
-//     console.error(err);
-//   } finally {
-//     client.release(); // 释放客户端连接
-//   }
-// };
-
-// //插入数据
-// const insertData = async () => {
-//   const client = await pool.connect();
-//   const insertQuery =
-//     "INSERT INTO user_info (user_name, password) VALUES($1, $2) RETURNING *";
-//   const values = ["hhy1", "123456"];
-
-//   try {
-//     const res = await client.query(insertQuery, values);
-//     console.log("插入成功:", res.rows[0]);
-//   } catch (err) {
-//     console.error(err);
-//   } finally {
-//     client.release();
-//   }
-// };
-
-// // 删除数据
-// const deleteData = async () => {
-//   const client = await pool.connect();
-//   const deleteQuery = "DELETE FROM user_info";
-
-//   try {
-//     const res = await client.query(deleteQuery);
-//     console.log("删除成功：", res);
-//   } catch (err) {
-//     console.error(err);
-//   } finally {
-//     client.release();
-//   }
-// };
-
-// deleteData();
-
-// insertData();
-
-// fetchData();
-
 const app = express();
 app.use(cors()); // 允许跨域请求
 app.use(express.json()); // 解析JSON请求体
 
 // 注册接口
 app.post("/api/register", async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, email } = req.body;
 
   try {
     // 检查用户是否已存在
@@ -90,16 +39,16 @@ app.post("/api/register", async (req, res) => {
     if (userExists.rows.length > 0) {
       return res.status(409).json({
         success: false,
-        message: "用户名已存在"
+        message: "用户名已存在",
       });
     }
 
     //密码加密（待实现）
-    
+
     // 插入新用户
     const result = await pool.query(
-      "INSERT INTO user_info (user_name, password) VALUES ($1, $2) RETURNING user_id, user_name",
-      [username, password]
+      "INSERT INTO user_info (user_name, password, user_email) VALUES ($1, $2,$3) RETURNING user_id, user_name",
+      [username, password, email]
     );
 
     res.status(201).json({
@@ -107,14 +56,85 @@ app.post("/api/register", async (req, res) => {
       message: "注册成功",
       user: {
         id: result.rows[0].user_id,
-        name: result.rows[0].user_name
-      }
+        name: result.rows[0].user_name,
+      },
     });
   } catch (err) {
     console.error("注册错误:", err);
     res.status(500).json({
       success: false,
-      message: "服务器内部错误"
+      message: "服务器内部错误",
+    });
+  }
+});
+
+// 登录接口
+app.post("/api/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    // 查询用户
+    const result = await pool.query(
+      "SELECT * FROM user_info WHERE user_name = $1",
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "用户名或密码错误",
+      });
+    }
+
+    const user = result.rows[0];
+
+    // 验证密码（实际项目中比较哈希值）
+    // const validPassword = await bcrypt.compare(password, user.password);
+    const validPassword = password === user.password; // 简化版本
+
+    if (!validPassword) {
+      return res.status(401).json({
+        success: false,
+        message: "用户名或密码错误",
+      });
+    }
+
+    // 登录成功
+    res.json({
+      success: true,
+      message: "登录成功",
+      user: {
+        id: user.user_id,
+        name: user.user_name,
+      },
+    });
+  } catch (err) {
+    console.error("登录错误:", err);
+    res.status(500).json({
+      success: false,
+      message: "服务器内部错误",
+    });
+  }
+});
+
+// 获取首页商品的数据
+app.get("/api/nav-items-default", async (req, res) => {
+  try {
+    //查询图片路径、商品名称和简介
+    const result = await pool.query(
+      "SELECT * FROM product_info WHERE is_display = true"
+    );
+
+    res.json({
+      success: true,
+      message: "获取数据成功",
+      result: result.rows,
+    });
+  } catch (error) {
+    console.error("获取nav-items错误:", error);
+    res.status(500).json({
+      success: false,
+      message: "服务器内部错误",
     });
   }
 });

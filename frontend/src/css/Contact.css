@@ -1,0 +1,126 @@
+/* Contact 组件样式 */
+
+.item_title {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #4a6fa5;
+}
+
+.list {
+  font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+  line-height: 1.6;
+  color: #444;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.item {
+  margin-bottom: 15px;
+  padding: 12px 15px;
+  border-radius: 6px;
+  background-color: #f9f9f9;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-left: 4px solid #4a6fa5;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.item:hover {
+  background-color: #f0f7ff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 地址样式 */
+.item.address {
+  font-size: 15px;
+  white-space: pre-line; /* 保留换行符 */
+  border-left-color: #3498db;
+}
+
+/* 电话样式 */
+.item.phone {
+  font-size: 16px;
+  color: #2c3e50;
+  font-weight: 500;
+  border-left-color: #2ecc71;
+}
+
+.item.phone::before {
+  content: "📞 ";
+  margin-right: 8px;
+}
+
+/* 邮箱样式 */
+.item.email {
+  font-size: 16px;
+  border-left-color: #e74c3c;
+}
+
+.item.email::before {
+  content: "✉️ ";
+  margin-right: 8px;
+}
+
+/* 邮箱链接样式 */
+.footer_mail_mta {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+  margin-left: 8px;
+  transition: all 0.3s ease;
+  border-bottom: 1px solid transparent;
+}
+
+.footer_mail_mta:hover {
+  color: #2980b9;
+  border-bottom: 1px solid #2980b9;
+  text-decoration: none;
+}
+
+.footer_mail_mta:active {
+  color: #1f639b;
+}
+
+/* 清除浮动 */
+.clear {
+  clear: both;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .item_title {
+    font-size: 20px;
+    margin-bottom: 15px;
+  }
+  
+  .address {
+    font-size: 14px;
+    padding: 10px;
+  }
+  
+  .phone, .email {
+    font-size: 15px;
+  }
+  
+  .item {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .item_title {
+    font-size: 18px;
+  }
+  
+  .address {
+    font-size: 13px;
+  }
+  
+  .phone, .email {
+    font-size: 14px;
+  }
+}

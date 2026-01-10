@@ -31,22 +31,22 @@ pool
 //   }
 // };
 
-// //插入数据
-// const insertData = async () => {
-//   const client = await pool.connect();
-//   const insertQuery =
-//     "INSERT INTO user_info (user_name, password) VALUES($1, $2) RETURNING *";
-//   const values = ["hhy1", "123456"];
+//插入数据
+const insertData = async () => {
+  const client = await pool.connect();
+  const insertQuery =
+    "INSERT INTO product_info (picture_path, product_name, description, is_display) VALUES($1, $2, $3, $4) RETURNING *";
+  const values = ["2.jpg","划船桨", "请添加简介",true];
 
-//   try {
-//     const res = await client.query(insertQuery, values);
-//     console.log("插入成功:", res.rows[0]);
-//   } catch (err) {
-//     console.error(err);
-//   } finally {
-//     client.release();
-//   }
-// };
+  try {
+    const res = await client.query(insertQuery, values);
+    console.log("插入成功:", res.rows[0]);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    client.release();
+  }
+};
 
 // // 删除数据
 // const deleteData = async () => {
@@ -65,7 +65,7 @@ pool
 
 // deleteData();
 
-// insertData();
+insertData();
 
 // fetchData();
 
