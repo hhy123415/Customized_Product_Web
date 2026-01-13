@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 
 function NavBar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);//控制“关于”菜单
   const location = useLocation();
   const aboutRef = useRef(null);
 
@@ -53,8 +53,14 @@ function NavBar() {
     <header className="navbar-container">
       <nav className="navbar">
         <div className="nav-logo">
-          <img src={"picture/default.png"} alt="logo" />
-          <span>网站名称</span>
+          <Link to="/">
+            <img
+              src={
+                "https://ueeshop.ly200-cdn.com/u_file/UPAQ/UPAQ575/2104/photo/a4a7be66ba.jpg?x-oss-process=image/format,webp"
+              }
+              alt="logo"
+            />
+          </Link>
         </div>
 
         {/* 移动端菜单按钮 */}
@@ -70,11 +76,7 @@ function NavBar() {
         </button>
 
         <ul className={`nav-links ${isMenuOpen ? "open" : ""}`}>
-          <li>
-            <Link to="/" className={location.pathname === "/" ? "active" : ""}>
-              首页
-            </Link>
-          </li>
+          {/* 关于 */}
           <li className="nav-item-with-dropdown" ref={aboutRef}>
             <button
               className={`nav-dropdown-toggle ${
@@ -129,6 +131,65 @@ function NavBar() {
                   role="menuitem"
                 >
                   联系我们
+                </Link>
+              </li>
+            </ul>
+          </li>
+          {/* 个人中心 */}
+          <li className="nav-item-with-dropdown" ref={aboutRef}>
+            <button
+              className={`nav-dropdown-toggle ${
+                location.pathname.startsWith("/about") ? "active" : ""
+              }`}
+              onClick={handleAboutClick}
+              onKeyDown={handleAboutKeyDown}
+              aria-expanded={isAboutOpen}
+              aria-haspopup="menu"
+            >
+              个人中心
+              <span className={`dropdown-arrow ${isAboutOpen ? "open" : ""}`}>
+                ▼
+              </span>
+            </button>
+            <ul
+              className={`dropdown-menu ${isAboutOpen ? "open" : ""}`}
+              role="menu"
+              aria-label="关于子菜单"
+            >
+              <li role="none">
+                <Link
+                  to="/about/platform"
+                  className={
+                    location.pathname === "/about/platform" ? "active" : ""
+                  }
+                  onClick={handleDropdownItemClick}
+                  role="menuitem"
+                >
+                  账号设置
+                </Link>
+              </li>
+              <li role="none">
+                <Link
+                  to="/about/capabilities"
+                  className={
+                    location.pathname === "/about/capabilities" ? "active" : ""
+                  }
+                  onClick={handleDropdownItemClick}
+                  role="menuitem"
+                >
+                  我的订单
+                </Link>
+              </li>
+              <li role="none">
+                <Link
+                  to="/about/contact"
+                  className={
+                    location.pathname === "/about/contact" ? "active" : ""
+                  }
+                  onClick={handleDropdownItemClick}
+                  role="menuitem"
+                >
+                  我的创意
                 </Link>
               </li>
             </ul>
