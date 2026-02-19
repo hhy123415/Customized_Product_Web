@@ -1,0 +1,11 @@
+{
+  "name": "my_web",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:hhy123415/Customized_Product_Web.git",
+  "author": "hhy123415 <2214317260@qq.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
