@@ -12,10 +12,15 @@ export interface HotelRow {
   user_id: number;
 }
 
+enum Role
+{
+  "regular","enterprise","admin"
+};
+
 export interface UserRow {
   user_id?: string;
   user_name: string;
   password: string;
   email: string;
-  is_admin: boolean;
+  role: Role;
 }

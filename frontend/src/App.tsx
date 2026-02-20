@@ -4,7 +4,7 @@ import Home from "./pages/Home";
 import { AuthProvider } from "./component/AuthProvider";
 import NavBar from "./component/Navbar";
 // import Login from "./Login";
-// import Register from "./Register";
+import Register from "./pages/Register";
 
 function App() {
   return (
@@ -16,8 +16,8 @@ function App() {
           </div>
           <Routes>
             <Route path="/" element={<Home />} />
-            {/* <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} /> */}
+            {/* <Route path="/login" element={<Login />} /> */}
+            <Route path="/register" element={<Register />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
