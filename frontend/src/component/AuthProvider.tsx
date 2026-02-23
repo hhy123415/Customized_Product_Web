@@ -14,7 +14,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       isLoggedIn: false,
       user_id: "",
       username: "",
-      isAdmin: false,
+      role: "regular",
     };
   });
 
@@ -31,7 +31,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
             isLoggedIn: true,
             user_id: res.data.user.user_id,
             username: res.data.user.username,
-            isAdmin: res.data.user.isAdmin,
+            role: res.data.user.role,
           });
         }
       } catch (err) {
@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           isLoggedIn: false,
           user_id: "",
           username: "",
-          isAdmin: false,
+          role: "regular",
         });
       } finally {
         setLoading(false);
@@ -49,8 +49,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     checkAuthStatus();
   }, []);
 
-  const login = (user_id: string, username: string, isAdmin: boolean) => {
-    setAuth({ isLoggedIn: true, user_id, username, isAdmin });
+  const login = (user_id: string, username: string, role: string) => {
+    setAuth({ isLoggedIn: true, user_id, username, role });
   };
 
   const logout = async () => {
@@ -61,7 +61,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         isLoggedIn: false,
         user_id: "",
         username: "",
-        isAdmin: false,
+        role: "regular",
       });
     }
   };

@@ -4,12 +4,12 @@ export interface AuthState {
   isLoggedIn: boolean;
   user_id: string;
   username: string;
-  isAdmin: boolean;
+  role: string;
 }
 
 export interface AuthContextType {
   auth: AuthState;
-  login: (user_id: string, username: string, isAdmin: boolean) => void;
+  login: (user_id: string, username: string, role: string) => void;
   logout: () => void;
 }
 

@@ -49,7 +49,7 @@ app.get("/api/me", authenticateToken, async (req: Request, res: Response) => {
     user: {
       user_id: req.user?.user_id,
       username: req.user?.username,
-      isAdmin: req.user?.isAdmin,
+      role: req.user?.role,
     },
   });
 });
@@ -117,6 +117,79 @@ app.post("/api/register", async (req: Request, res: Response) => {
       message: "服务器内部错误",
     });
   }
+});
+
+// --- 登录接口 ---
+app.post("/api/login", async (req: Request, res: Response) => {
+  const { username, password } = req.body;
+
+  try {
+    // 查询用户
+    const result: QueryResult<UserRow> = await pool.query(
+      "SELECT * FROM users WHERE username = $1",
+      [username],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "用户名或密码错误",
+      });
+    }
+
+    const user = result.rows[0];
+
+    // 验证密码（比较哈希值）
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!validPassword) {
+      return res.status(401).json({
+        success: false,
+        message: "用户名或密码错误",
+      });
+    }
+
+    // 登录成功,生成token
+    const token = jwt.sign(
+      {
+        user_id: user.user_id,
+        username: user.username,
+        role: user.role,
+      },
+      SECRET_KEY,
+      { expiresIn: "24h" }, // 有效期 24 小时
+    );
+
+    // 设置 HTTP-Only Cookie
+    res.cookie("token", token, {
+      httpOnly: true, // 防止 JavaScript 读取，防 XSS
+      secure: false, // 允许http,true时仅允许https
+      sameSite: "lax", // 防止 CSRF
+      maxAge: 24 * 60 * 60 * 1000, // 与 JWT 有效期一致
+      path: "/", // 确保 cookie 在所有路径下可用
+    });
+
+    // 返回用户信息给前端（不含 Token）
+    res.json({
+      success: true,
+      message: "登录成功",
+      user_id: user.user_id,
+      user_name: user.username,
+      role: user.role,
+    });
+  } catch (err) {
+    console.error("登录错误:", err);
+    res.status(500).json({
+      success: false,
+      message: "服务器内部错误",
+    });
+  }
+});
+
+// --- 登出接口 ---
+app.post("/api/logout", (req: Request, res: Response) => {
+  res.clearCookie("token");
+  res.json({ success: true, message: "登出成功" });
 });
 
 const PORT = 3001;

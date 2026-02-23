@@ -124,6 +124,19 @@
   box-shadow: 0 8px 20px rgba(24, 144, 255, 0.3);
 }
 
+/* 企业主题 */
+.enterpriseTheme {
+  background: linear-gradient(135deg, #2ecc71, #27ae60); /* 绿色系 */
+  color: #096dd9;
+  border-color: #91d5ff;
+}
+.enterpriseTheme:hover {
+  background: linear-gradient(135deg, #34d87a, #31be6b);
+  color: white;
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(24, 144, 255, 0.3);
+}
+
 /* 入场动画 */
 @keyframes fadeIn {
   from {

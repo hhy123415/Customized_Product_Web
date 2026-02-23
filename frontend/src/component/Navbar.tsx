@@ -28,7 +28,7 @@ function NavBar() {
           {auth.isLoggedIn ? (
             <>
               <li className={styles["welcome-message"]}>
-                欢迎回来，{auth.isAdmin ? "管理员" : "用户"}
+                欢迎回来，{auth.role=="admin" ? "管理员" : "用户"}
                 <span style={{ fontWeight: "bold", color: "orange" }}>
                   {auth.username}
                 </span>

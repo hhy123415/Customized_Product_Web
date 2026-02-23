@@ -10,7 +10,7 @@ interface AdminRouteProps {
 const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   const { auth } = useAuth();
 
-  if (!auth.isLoggedIn || !auth.isAdmin) {
+  if (!auth.isLoggedIn || auth.role!="admin") {
     alert("未登录或没有权限");
     return <Navigate to="/" />;
   }

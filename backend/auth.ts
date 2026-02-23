@@ -4,19 +4,12 @@ import dotenv from "dotenv";
 
 dotenv.config(); // 确保在这个文件读取 process.env 之前加载
 
-// -----------------------------------------------------
-// 1. 定义 JWT Payload 的类型
-// 假设你的 JWT payload 中包含 id, username 和 isAdmin
 interface JwtPayload {
   user_id: string; // 用户ID，用于数据库查询等
   username: string; // 用户名
-  isAdmin: boolean; // 是否是管理员
-  // 如果你的 JWT payload 中有其他字段，也请在这里添加
+  role: string; // 账号类型
 }
 
-// 2. 扩展 Express 的 Request 接口，为 req.user 添加类型
-// 这将允许你在应用程序的其他地方直接访问 req.user.id，并获得类型提示
-// 务必放在 declare global 块中，并且在其他文件导入这个模块时，这个类型扩展会被识别
 declare global {
   namespace Express {
     interface Request {
@@ -24,7 +17,6 @@ declare global {
     }
   }
 }
-// -----------------------------------------------------
 
 const SECRET_KEY = process.env.JWT_SECRET; // JWT 密钥，如果不存在 dotenv.config() 会使其为 undefined
 
@@ -33,7 +25,6 @@ if (!SECRET_KEY) {
   console.error(
     "Critical Error: JWT_SECRET is not defined in environment variables.",
   );
-  // 在生产环境中，你可能希望程序在这里退出
   process.exit(1);
 }
 
@@ -78,7 +69,7 @@ export const authenticateAdmin = (
   }
 
   // req.user.isAdmin 现在有正确的类型提示
-  if (req.user.isAdmin !== true) {
+  if (req.user.role !== "admin") {
     return res
       .status(403)
       .json({ success: false, message: "权限不足，需要管理员身份" });

@@ -19,8 +19,8 @@ enum Role
 
 export interface UserRow {
   user_id?: string;
-  user_name: string;
-  password: string;
+  username: string;
+  password_hash: string;
   email: string;
   role: Role;
 }

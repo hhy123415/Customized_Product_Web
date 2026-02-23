@@ -27,8 +27,8 @@ function Home() {
           </div>
 
           <div className={styles.grid}>
-            {auth.isAdmin ? (
-              /* 管理员功能区 */
+            {/* 管理员功能区 */}
+            {auth.role === "admin" && (
               <>
                 <Link
                   to="/query"
@@ -44,9 +44,54 @@ function Home() {
                   <span className={styles.icon}>📋</span>
                   审核发布
                 </Link>
+                {/* 更多管理员专属功能 */}
+                <Link
+                  to="/manage-users"
+                  className={`${styles.menuBtn} ${styles.adminTheme}`}
+                >
+                  <span className={styles.icon}>👥</span>
+                  管理用户
+                </Link>
               </>
-            ) : (
-              /* 普通用户功能区 */
+            )}
+
+            {/* 企业用户功能区 */}
+            {auth.role === "enterprise" && (
+              <>
+                <Link
+                  to="/enterprise/new-application"
+                  className={`${styles.menuBtn} ${styles.enterpriseTheme}`} // 假设有 enterpriseTheme
+                >
+                  <span className={styles.icon}>➕</span>
+                  提交企业酒店申请
+                </Link>
+                <Link
+                  to="/enterprise/my-applications"
+                  className={`${styles.menuBtn} ${styles.enterpriseTheme}`}
+                >
+                  <span className={styles.icon}>⏳</span>
+                  查看我的企业申请
+                </Link>
+                <Link
+                  to="/enterprise/manage-hotels"
+                  className={`${styles.menuBtn} ${styles.enterpriseTheme}`}
+                >
+                  <span className={styles.icon}>🏢</span>
+                  管理企业酒店列表
+                </Link>
+                {/* 更多企业用户专属功能 */}
+                <Link
+                  to="/enterprise/reports"
+                  className={`${styles.menuBtn} ${styles.enterpriseTheme}`}
+                >
+                  <span className={styles.icon}>📊</span>
+                  数据报告
+                </Link>
+              </>
+            )}
+
+            {/* 普通用户功能区  */}
+            {auth.role === "regular" && (
               <>
                 <Link
                   to="/new-request"

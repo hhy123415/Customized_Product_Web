@@ -43,7 +43,7 @@ function Register() {
   const handleRoleChange = (newRole: Role) => {
     setRole(newRole);
     setErrors({});
-    setFormData((prev) => ({ ...prev, adminCode: "" }));
+    setFormData((prev) => ({ ...prev, registerCode: "" }));
   };
   // 处理表单数据改变
   const handleFormChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -217,13 +217,13 @@ function Register() {
           {/* 管理员额外字段：动态渲染 */}
           {role === "enterprise" && (
             <div className={style["form-group"]}>
-              <label htmlFor="adminCode" className={style["form-label"]}>
-                管理员注册码
+              <label htmlFor="registerCode" className={style["form-label"]}>
+                注册码
               </label>
               <input
                 type="text"
-                name="adminCode"
-                id="adminCode"
+                name="registerCode"
+                id="registerCode"
                 value={formData.registerCode}
                 onChange={handleFormChange}
                 placeholder="请输入由系统发放的注册码"
