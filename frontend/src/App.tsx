@@ -5,6 +5,8 @@ import { AuthProvider } from "./component/AuthProvider";
 import NavBar from "./component/Navbar";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import MyAccount from "./pages/MyAccount";
+import UserRoute from "./component/UserRoute";
 
 function App() {
   return (
@@ -18,6 +20,14 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route
+              path="/my_account"
+              element={
+                <UserRoute>
+                  <MyAccount />
+                </UserRoute>
+              }
+            />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

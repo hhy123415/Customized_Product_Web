@@ -28,7 +28,7 @@ function NavBar() {
           {auth.isLoggedIn ? (
             <>
               <li className={styles["welcome-message"]}>
-                欢迎回来，{auth.role=="admin" ? "管理员" : "用户"}
+                欢迎回来，{auth.role == "admin" ? "管理员" : "用户"}
                 <span style={{ fontWeight: "bold", color: "orange" }}>
                   {auth.username}
                 </span>
@@ -41,6 +41,16 @@ function NavBar() {
                 >
                   登出
                 </button>
+              </li>
+              <li>
+                <Link
+                  to="/my_account"
+                  className={
+                    location.pathname === "/my_account" ? styles.active : ""
+                  }
+                >
+                  个人中心
+                </Link>
               </li>
             </>
           ) : (

@@ -1,0 +1,56 @@
+.container {
+  max-width: 600px;
+  margin: 50px auto; /* 居中显示，顶部有间距 */
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+  font-family: Arial, sans-serif;
+  color: #333;
+}
+
+.container h2 {
+  text-align: center;
+  color: #2c3e50;
+  margin-bottom: 25px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 15px;
+}
+
+.userInfoCard {
+  background-color: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 20px 25px;
+}
+
+.userInfoCard p {
+  margin-bottom: 12px;
+  line-height: 1.6;
+  font-size: 1.1em;
+  color: #555;
+}
+
+.userInfoCard p strong {
+  color: #2c3e50;
+  min-width: 80px; /* 确保标签对齐 */
+  display: inline-block;
+}
+
+.errorText {
+  color: #e74c3c;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 20px;
+}
+
+/* 可以在这里添加一些响应式规则 */
+@media (max-width: 768px) {
+  .container {
+    margin: 20px;
+    padding: 20px;
+  }
+  .userInfoCard p {
+    font-size: 1em;
+  }
+}
