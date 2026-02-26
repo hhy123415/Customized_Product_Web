@@ -121,9 +121,10 @@ function Login() {
     }
   };
 
-  // const handleForgotPassword = () => {
-  //   alert("待制作中");
-  // };
+  const handleForgotPassword = () => {
+    //跳转到重置密码页面
+    navigate("/forget_password");
+  };
 
   const handleRegisterRedirect = () => {
     // 跳转到注册页面
@@ -176,7 +177,7 @@ function Login() {
             )}
           </div>
 
-          {/* <div className={style["form-options"]}>
+          <div className={style["form-options"]}>
             <button
               type="button"
               className={style["forgot-password"]}
@@ -184,7 +185,7 @@ function Login() {
             >
               忘记密码？
             </button>
-          </div> */}
+          </div>
 
           {errors.submit && (
             <div className={style["submit-error"]}>{errors.submit}</div>

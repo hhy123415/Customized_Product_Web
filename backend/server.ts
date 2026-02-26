@@ -42,7 +42,7 @@ app.use(
 app.use(express.json());
 const SECRET_KEY = process.env.JWT_SECRET || "";
 
-// --- 获取当前用户信息接口 (AuthProvider 初始化时调用) ---
+// --- 获取当前用户信息接口 (AuthProvider 初始化时调用),用于验证权限操作 ---
 app.get("/api/me", authenticateToken, async (req: Request, res: Response) => {
   res.json({
     success: true,
@@ -53,6 +53,36 @@ app.get("/api/me", authenticateToken, async (req: Request, res: Response) => {
     },
   });
 });
+
+//---获取用户相关信息，用于用户中心显示---
+app.get(
+  "/api/my_info",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const user_id = req.user?.user_id;
+    try {
+      const result: QueryResult<UserRow> = await pool.query(
+        "SELECT * FROM users WHERE user_id = $1",
+        [user_id],
+      );
+
+      res.json({
+        success: true,
+        user: {
+          username: req.user?.username,
+          role: req.user?.role,
+          email: result.rows[0].email,
+        },
+      });
+    } catch (err) {
+      console.error("my_info错误:", err);
+      res.status(500).json({
+        success: false,
+        message: "服务器内部错误",
+      });
+    }
+  },
+);
 
 // --- 注册接口 ---
 app.post("/api/register", async (req: Request, res: Response) => {
@@ -91,8 +121,7 @@ app.post("/api/register", async (req: Request, res: Response) => {
 
     // 判断是否是企业用户（注册码后续可优化）
     if (role === "enterprise") {
-      if(registerCode!="6666")
-      {
+      if (registerCode != "6666") {
         return res.status(403).json({
           success: false,
           message: "注册码错误",
@@ -190,6 +219,80 @@ app.post("/api/login", async (req: Request, res: Response) => {
 app.post("/api/logout", (req: Request, res: Response) => {
   res.clearCookie("token");
   res.json({ success: true, message: "登出成功" });
+});
+
+//---重置密码时，验证用户名和邮箱是否存在---
+app.post("/api/forget1", async (req: Request, res: Response) => {
+  const { username, email } = req.body;
+
+  try {
+    // 查询用户
+    const result: QueryResult<UserRow> = await pool.query(
+      "SELECT * FROM users WHERE username = $1 and email = $2",
+      [username, email],
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        success: false,
+        message: "用户名或邮箱错误",
+      });
+    }
+
+    // 返回用户信息给前端（不含 Token）
+    res.json({
+      success: true,
+      message: "用户名和邮箱匹配成功",
+    });
+  } catch (err) {
+    console.error("forget1错误:", err);
+    res.status(500).json({
+      success: false,
+      message: "服务器内部错误",
+    });
+  }
+});
+
+//---重置密码时，修改对应密码---
+app.post("/api/forget2", async (req: Request, res: Response) => {
+  const { username, newPassword } = req.body;
+
+  //后端再次验证密码长度
+  if (String(newPassword).length < 6) {
+    return res.status(409).json({ success: false, message: "密码长度至少6位" });
+  }
+
+  //密码加密
+  const saltRounds = 10;
+  const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+  try {
+    //更新语句
+    const updateQuery = `UPDATE users SET password_hash = $1 WHERE username = $2 RETURNING *;`;
+    const result: QueryResult<UserRow> = await pool.query(updateQuery, [
+      hashedPassword,
+      username,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.json({
+        success: false,
+        message: "用户名未找到",
+      });
+    }
+
+    // 返回用户信息给前端（不含 Token）
+    res.json({
+      success: true,
+      message: "密码修改成功",
+    });
+  } catch (err) {
+    console.error("forget2错误:", err);
+    res.status(500).json({
+      success: false,
+      message: "服务器内部错误",
+    });
+  }
 });
 
 const PORT = 3001;

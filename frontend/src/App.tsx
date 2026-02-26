@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyAccount from "./pages/MyAccount";
 import UserRoute from "./component/UserRoute";
+import Forget from "./pages/ForgetPassword";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forget_password" element={<Forget />} />
             <Route
               path="/my_account"
               element={
