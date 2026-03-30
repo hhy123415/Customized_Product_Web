@@ -1,4 +1,4 @@
-import styles from "../css/Navbar.module.css";
+﻿import styles from "../css/Navbar.module.css";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
@@ -25,10 +25,28 @@ function NavBar() {
               首页
             </Link>
           </li>
+          <li>
+            <Link
+              to="/CreativeSquare"
+              className={location.pathname === "/CreativeSquare" ? styles.active : ""}
+            >
+              创意广场
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/product-customization"
+              className={
+                location.pathname === "/product-customization" ? styles.active : ""
+              }
+            >
+              产品定制
+            </Link>
+          </li>
           {auth.isLoggedIn ? (
             <>
               <li className={styles["welcome-message"]}>
-                欢迎回来，{auth.role == "admin" ? "管理员" : "用户"}
+                欢迎回来，{auth.role === "admin" ? "管理员" : "用户"}{" "}
                 <span style={{ fontWeight: "bold", color: "orange" }}>
                   {auth.username}
                 </span>
@@ -75,3 +93,4 @@ function NavBar() {
 }
 
 export default NavBar;
+

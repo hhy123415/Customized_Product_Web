@@ -7,41 +7,8 @@
     <title>frontend</title>
   </head>
   <body>
+    <script src="\Core\live2dcubismcore.min.js"></script><!--引入 Live2D Cubism Core-->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
-  <script>
- window.difyChatbotConfig = {
-  token: 'nI2SiiEKyeM6Ajvh',
-  baseUrl: 'http://localhost',
-  inputs: {
-    // You can define the inputs from the Start node here
-    // key is the variable name
-    // e.g.
-    // name: "NAME"
-  },
-  systemVariables: {
-    // user_id: 'YOU CAN DEFINE USER ID HERE',
-    // conversation_id: 'YOU CAN DEFINE CONVERSATION ID HERE, IT MUST BE A VALID UUID',
-  },
-  userVariables: {
-    // avatar_url: 'YOU CAN DEFINE USER AVATAR URL HERE',
-    // name: 'YOU CAN DEFINE USER NAME HERE',
-  },
- }
-</script>
-<script
- src="http://localhost/embed.min.js"
- id="nI2SiiEKyeM6Ajvh"
- defer>
-</script>
-<style>
-  #dify-chatbot-bubble-button {
-    background-color: #1C64F2 !important;
-  }
-  #dify-chatbot-bubble-window {
-    width: 24rem !important;
-    height: 40rem !important;
-  }
-</style>
 </html>

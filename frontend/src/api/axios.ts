@@ -1,7 +1,9 @@
 import axios from "axios";
 
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+
 const api = axios.create({
-  baseURL: "http://localhost:3001/api", 
+  baseURL: apiBaseURL,
   withCredentials: true, // 必须设置，否则 Cookie 不会发送
   timeout: 5000,
 });

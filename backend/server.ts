@@ -6,9 +6,16 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import { authenticateToken } from "./auth";
-import type { UserRow } from "./Interface";
+import type { UserRow, PostRow } from "./Interface";
+import axios from "axios";
+import Stream from "node:stream";
 
 dotenv.config();
+
+const DIFY_API_KEY = process.env.DIFY_API_KEY;
+const DIFY_API_URL = process.env.DIFY_API_URL;
+const ENTERPRISE_REGISTER_CODE = process.env.ENTERPRISE_REGISTER_CODE || "6666";
+const ADMIN_REGISTER_CODE = process.env.ADMIN_REGISTER_CODE || "8888";
 
 // 连接数据库配置
 const pool = new Pool({
@@ -87,8 +94,16 @@ app.get(
 // --- 注册接口 ---
 app.post("/api/register", async (req: Request, res: Response) => {
   const { username, password, email, registerCode, role } = req.body;
+  const allowedRoles = ["regular", "enterprise", "admin"];
 
   try {
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "用户类型无效",
+      });
+    }
+
     // 检查用户是否已存在 (使用泛型确保返回类型)
     const userExists: QueryResult<UserRow> = await pool.query(
       "SELECT * FROM users WHERE username = $1",
@@ -121,10 +136,19 @@ app.post("/api/register", async (req: Request, res: Response) => {
 
     // 判断是否是企业用户（注册码后续可优化）
     if (role === "enterprise") {
-      if (registerCode != "6666") {
+      if (registerCode !== ENTERPRISE_REGISTER_CODE) {
         return res.status(403).json({
           success: false,
-          message: "注册码错误",
+          message: "企业注册码错误",
+        });
+      }
+    }
+
+    if (role === "admin") {
+      if (registerCode !== ADMIN_REGISTER_CODE) {
+        return res.status(403).json({
+          success: false,
+          message: "管理员注册码错误",
         });
       }
     }
@@ -292,6 +316,86 @@ app.post("/api/forget2", async (req: Request, res: Response) => {
       success: false,
       message: "服务器内部错误",
     });
+  }
+});
+
+//---获取帖子总览信息---
+app.get(
+  "/api/posts",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const user_id = req.user?.user_id; //与后续我的帖子功能相关
+    try {
+      const result: QueryResult<PostRow> = await pool.query(
+        `
+          SELECT 
+            p.post_id,
+            p.title,
+            p.content,
+            p.reply_count,
+            p.created_at,
+            p.updated_at,
+            u.username AS author_username
+          FROM posts p
+          JOIN users u ON p.user_id = u.user_id
+          ORDER BY p.created_at DESC
+        `,
+      );
+
+      res.json({
+        success: true,
+        posts: result.rows,
+      });
+    } catch (err) {
+      console.error("posts错误:", err);
+      res.status(500).json({
+        success: false,
+        message: "服务器内部错误",
+      });
+    }
+  },
+);
+
+//---后端转发ai对话请求---
+app.post("/api/chat", authenticateToken, async (req, res) => {
+  try {
+    const { message, conversation_id } = req.body;
+    const user_id = req.user?.user_id;
+
+    // 设置响应头，告知浏览器这是一个流
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const response = await axios.post(
+      `${DIFY_API_URL}/chat-messages`,
+      {
+        inputs: {},
+        query: message,
+        response_mode: "streaming",
+        user: user_id || "default_user",
+        // 如果 conversation_id 为空，Dify 会创建新会话；如果不为空，则继续旧会话
+        conversation_id: conversation_id || "",
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${DIFY_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        responseType: "stream",
+      },
+    );
+
+    // 将 Dify 的流管道直接连接到 res
+    response.data.pipe(res);
+    // 当 Dify 流结束时，确保 res 也关闭
+    response.data.on("end", () => {
+      res.end();
+    });
+  } catch (error) {
+    // console.log(error);
+    res.status(500).json({ error: "Dify logic error" });
+    res.end();
   }
 });
 

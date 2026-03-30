@@ -1,4 +1,5 @@
 import styles from "../css/Home.module.css";
+import LoginStyle from "../css/LoginTip.module.css";
 import { useAuth } from "../hooks/useAuth";
 import { Link } from "react-router-dom";
 
@@ -6,14 +7,14 @@ function Home() {
   const { auth } = useAuth();
 
   return (
-    <div className={styles.container}>
+    <div className={LoginStyle.container}>
       {/* 未登录状态*/}
       {!auth.isLoggedIn && (
-        <div className={styles.card}>
-          <h1 className={styles.title}>请先登录以正常使用功能</h1>
-          <p className={styles.subtitle}>登录后您可以访问完整的功能和服务</p>
-          <div className={styles.actionArea}>
-            <Link to="/login" className={styles.loginBtn}>
+        <div className={LoginStyle.card}>
+          <h1 className={LoginStyle.title}>请先登录以正常使用功能</h1>
+          <p className={LoginStyle.subtitle}>登录后您可以访问完整的功能和服务</p>
+          <div className={LoginStyle.actionArea}>
+            <Link to="/login" className={LoginStyle.loginBtn}>
               立即登录
             </Link>
           </div>

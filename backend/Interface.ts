@@ -12,10 +12,11 @@ export interface HotelRow {
   user_id: number;
 }
 
-enum Role
-{
-  "regular","enterprise","admin"
-};
+enum Role {
+  "regular",
+  "enterprise",
+  "admin",
+}
 
 export interface UserRow {
   user_id?: string;
@@ -23,4 +24,14 @@ export interface UserRow {
   password_hash: string;
   email: string;
   role: Role;
+}
+
+export interface PostRow {
+  post_id: string;
+  title: string;
+  content: string;
+  reply_count: number;
+  created_at: string;
+  updated_at: string;
+  author_username: string;
 }

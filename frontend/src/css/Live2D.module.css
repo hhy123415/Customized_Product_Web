@@ -1,0 +1,612 @@
+/* 容器定位 */
+.live2d-container {
+  position: fixed;
+  right: 0;
+  bottom: 20px;
+  z-index: 9999;
+  max-width: min(300px, calc(100vw - 20px));
+  max-height: calc(100vh - 40px);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* 画布区域 - 完全透明背景 */
+.canvas-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: transparent;
+  padding: 16px;
+  position: relative;
+  overflow: visible;
+}
+
+/* 聊天界面区域 - 默认隐藏，hover时显示 */
+.chat-interface {
+  width: 100%;
+  margin-bottom: 12px;
+  position: relative;
+  z-index: 10;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+/* 鼠标 hover 画布区域时显示聊天界面 */
+.canvas-area:hover .chat-interface {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* 气泡容器 */
+.chat-bubble-container {
+  position: relative;
+  width: 100%;
+}
+
+/* 气泡样式 - 玻璃拟态 */
+.chat-bubble {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(248, 250, 252, 0.9) 100%
+  );
+  border-radius: 20px 20px 4px 20px;
+  padding: 16px 20px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  margin-bottom: 12px;
+  max-width: 100%;
+  min-width: 120px;
+  max-height: min(250px, 30vh);
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #1e293b;
+  white-space: pre-wrap;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  position: relative;
+  animation: bubbleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+@keyframes bubbleIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 气泡小箭头 */
+.chat-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  right: 24px;
+  width: 16px;
+  height: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(248, 250, 252, 0.9) 0%,
+    rgba(248, 250, 252, 0.9) 100%
+  );
+  border-right: 1px solid rgba(255, 255, 255, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  transform: rotate(45deg);
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* 打字指示器 */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 50%;
+  animation: typingBounce 1.4s ease-in-out infinite both;
+}
+
+.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* 新对话按钮 */
+.new-chat-btn {
+  position: absolute;
+  top: -32px;
+  right: 40px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  opacity: 0.9;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  z-index: 20;
+  letter-spacing: 0.5px;
+}
+
+.new-chat-btn:hover {
+  opacity: 1;
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+/* 切换对话显示按钮 */
+.toggle-chat-btn {
+  position: absolute;
+  top: -32px;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.9;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  z-index: 20;
+}
+
+.toggle-chat-btn:hover {
+  opacity: 1;
+  transform: translateY(-2px) scale(1.1);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.toggle-chat-btn.hidden-state {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.toggle-chat-btn.hidden-state:hover {
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+}
+
+/* 隐藏对话时的气泡样式 */
+.chat-bubble.hidden {
+  display: none !important;
+}
+
+/* 气泡隐藏提示 */
+.chat-hidden-hint {
+  position: absolute;
+  top: -24px;
+  right: 24px;
+  background: rgba(245, 158, 11, 0.9);
+  color: white;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: all 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.chat-bubble-container:hover .chat-hidden-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 画布包装器 - 响应式尺寸 */
+.canvas-wrapper {
+  position: relative;
+  width: min(200px, calc(100vw - 60px));
+  height: min(250px, calc(100vh - 300px));
+  min-height: 200px;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 10;
+}
+
+/* 核心：处理 Canvas 的逻辑隐藏 */
+.logic-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(100px);
+  position: absolute;
+  bottom: 0;
+  right: 0;
+}
+
+.live2d-canvas {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+}
+
+/* 输入框区域 - 默认隐藏，hover时显示 */
+.input-box {
+  display: flex;
+  margin-top: 12px;
+  gap: 8px;
+  width: 100%;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 10;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+/* 鼠标 hover 画布区域时显示输入框 */
+.canvas-area:hover .input-box {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.input-box input {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 20px;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  color: #334155;
+  transition: all 0.3s;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.input-box input::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.input-box input:focus {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.02),
+    0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.input-box input:disabled {
+  background: rgba(241, 245, 249, 0.6);
+  cursor: not-allowed;
+  color: #94a3b8;
+}
+
+.input-box button {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  white-space: nowrap;
+}
+
+.input-box button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.input-box button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.input-box button:disabled {
+  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* 关闭按钮 - 默认隐藏，hover画布时显示 */
+.close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #64748b;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  pointer-events: none;
+}
+
+.canvas-area:hover .close-btn {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.close-btn:hover {
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* 召唤标签 - 霓虹光效 */
+.summon-tag {
+  position: fixed;
+  right: 0;
+  bottom: 40px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  padding: 14px 20px;
+  border-top-left-radius: 28px;
+  border-bottom-left-radius: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 14px;
+  transform: translateX(calc(100% - 50px));
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 4px 20px rgba(99, 102, 241, 0.4),
+    0 0 20px rgba(99, 102, 241, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  z-index: 9998;
+}
+
+.summon-tag::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 30px 0 0 30px;
+  padding: 2px;
+  background: linear-gradient(135deg, #818cf8, #c084fc, #818cf8);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.summon-tag:hover {
+  transform: translateX(0);
+  box-shadow:
+    0 8px 30px rgba(99, 102, 241, 0.5),
+    0 0 30px rgba(139, 92, 246, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.summon-tag:hover::before {
+  opacity: 1;
+  animation: borderRotate 3s linear infinite;
+}
+
+@keyframes borderRotate {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+.summon-tag svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+/* 隐藏状态 */
+.is-hidden {
+  width: 50px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* 响应式适配 */
+@media (max-width: 480px) {
+  .live2d-container {
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .canvas-area {
+    padding: 12px;
+  }
+
+  .canvas-wrapper {
+    width: calc(100vw - 40px);
+    height: min(350px, calc(100vh - 250px));
+  }
+
+  .chat-bubble {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .input-box {
+    padding: 2px;
+  }
+
+  .input-box input {
+    padding: 10px 12px;
+  }
+
+  .input-box button {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+}
+
+/* Markdown 内容样式 */
+.markdown-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+}
+
+/* 标题样式 */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.markdown-content h1 { font-size: 1.4em; }
+.markdown-content h2 { font-size: 1.2em; }
+.markdown-content h3 { font-size: 1.1em; }
+
+/* 段落和列表 */
+.markdown-content p {
+  margin: 8px 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.markdown-content li {
+  margin: 4px 0;
+}
+
+/* 粗体和斜体 */
+.markdown-content strong {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.markdown-content em {
+  color: #7c3aed;
+  font-style: italic;
+}
+
+/* 代码样式 */
+.markdown-content .inline-code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.9em;
+  color: #e11d48;
+}
+
+.markdown-content .code-block {
+  background: #1f2937;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.markdown-content .code-block code {
+  color: #e5e7eb;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+/* 引用块 */
+.markdown-content blockquote {
+  border-left: 4px solid #3b82f6;
+  margin: 8px 0;
+  padding-left: 12px;
+  color: #6b7280;
+  background: #f9fafb;
+  padding: 8px 12px;
+  border-radius: 0 4px 4px 0;
+}
+
+/* 链接 */
+.markdown-content a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+/* 表格 */
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.9em;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #e5e7eb;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+/* LaTeX 公式样式调整 */
+.markdown-content .katex {
+  font-size: 1em;
+}
+
+.markdown-content .katex-display {
+  margin: 8px 0;
+  overflow-x: auto;
+}
