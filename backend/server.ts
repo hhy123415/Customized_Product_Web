@@ -8,7 +8,6 @@ import jwt from "jsonwebtoken";
 import { authenticateToken } from "./auth";
 import type { UserRow, PostRow } from "./Interface";
 import axios from "axios";
-import Stream from "node:stream";
 
 dotenv.config();
 
@@ -359,6 +358,12 @@ app.get(
 //---后端转发ai对话请求---
 app.post("/api/chat", authenticateToken, async (req, res) => {
   try {
+    if (!DIFY_API_URL || !DIFY_API_KEY) {
+      return res.status(500).json({
+        error: "Dify is not configured. Please set DIFY_API_URL and DIFY_API_KEY.",
+      });
+    }
+
     const { message, conversation_id } = req.body;
     const user_id = req.user?.user_id;
 
@@ -377,14 +382,32 @@ app.post("/api/chat", authenticateToken, async (req, res) => {
         // 如果 conversation_id 为空，Dify 会创建新会话；如果不为空，则继续旧会话
         conversation_id: conversation_id || "",
       },
-      {
-        headers: {
-          Authorization: `Bearer ${DIFY_API_KEY}`,
-          "Content-Type": "application/json",
+        {
+          headers: {
+            Authorization: `Bearer ${DIFY_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          responseType: "stream",
+          validateStatus: () => true,
         },
-        responseType: "stream",
-      },
-    );
+      );
+
+    if (response.status < 200 || response.status >= 300) {
+      let errorBody = "";
+
+      response.data.on("data", (chunk: Buffer) => {
+        errorBody += chunk.toString("utf8");
+      });
+
+      response.data.on("end", () => {
+        res.status(response.status).json({
+          error: "Dify upstream error",
+          details: errorBody || "Empty upstream error response",
+        });
+      });
+
+      return;
+    }
 
     // 将 Dify 的流管道直接连接到 res
     response.data.pipe(res);
@@ -393,8 +416,11 @@ app.post("/api/chat", authenticateToken, async (req, res) => {
       res.end();
     });
   } catch (error) {
-    // console.log(error);
-    res.status(500).json({ error: "Dify logic error" });
+      console.error("Dify logic error:", error);
+    res.status(500).json({
+      error: "Dify logic error",
+      details: error instanceof Error ? error.message : "Unknown backend error",
+    });
     res.end();
   }
 });

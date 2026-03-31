@@ -291,6 +291,11 @@ app.get("/api/posts", auth_1.authenticateToken, async (req, res) => {
 //---后端转发ai对话请求---
 app.post("/api/chat", auth_1.authenticateToken, async (req, res) => {
     try {
+        if (!DIFY_API_URL || !DIFY_API_KEY) {
+            return res.status(500).json({
+                error: "Dify is not configured. Please set DIFY_API_URL and DIFY_API_KEY.",
+            });
+        }
         const { message, conversation_id } = req.body;
         const user_id = req.user?.user_id;
         // 设置响应头，告知浏览器这是一个流
@@ -310,7 +315,21 @@ app.post("/api/chat", auth_1.authenticateToken, async (req, res) => {
                 "Content-Type": "application/json",
             },
             responseType: "stream",
+            validateStatus: () => true,
         });
+        if (response.status < 200 || response.status >= 300) {
+            let errorBody = "";
+            response.data.on("data", (chunk) => {
+                errorBody += chunk.toString("utf8");
+            });
+            response.data.on("end", () => {
+                res.status(response.status).json({
+                    error: "Dify upstream error",
+                    details: errorBody || "Empty upstream error response",
+                });
+            });
+            return;
+        }
         // 将 Dify 的流管道直接连接到 res
         response.data.pipe(res);
         // 当 Dify 流结束时，确保 res 也关闭
@@ -319,8 +338,11 @@ app.post("/api/chat", auth_1.authenticateToken, async (req, res) => {
         });
     }
     catch (error) {
-        // console.log(error);
-        res.status(500).json({ error: "Dify logic error" });
+        console.error("Dify logic error:", error);
+        res.status(500).json({
+            error: "Dify logic error",
+            details: error instanceof Error ? error.message : "Unknown backend error",
+        });
         res.end();
     }
 });

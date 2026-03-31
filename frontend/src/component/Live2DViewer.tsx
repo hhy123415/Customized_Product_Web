@@ -5,21 +5,25 @@ import style from "../css/Live2D.module.css";
 import { Power, PowerOff, MessageCircle, MessageSquareOff } from "lucide-react";
 import api from "../api/axios";
 
-// Markdown 渲染相关导入
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css"; // 引入 KaTeX 样式
+import "katex/dist/katex.min.css";
 import type { Components } from "react-markdown";
 import type { ReactNode, HTMLAttributes } from "react";
 
+const DEFAULT_ERROR_TEXT = "Oops, something went wrong.";
+const NEW_CHAT_TEXT = "Hello! Let's start a new topic.";
+
 const Live2DViewer: React.FC = () => {
   const [isVisible, setIsVisible] = useState(true);
-  const [isChatVisible, setIsChatVisible] = useState(true); // 控制对话显示/隐藏
+  const [isChatVisible, setIsChatVisible] = useState(true);
   const [inputText, setInputText] = useState("");
   const [replyText, setReplyText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(() =>
+    localStorage.getItem("l2d_conv_id"),
+  );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<Application | null>(null);
@@ -35,7 +39,7 @@ const Live2DViewer: React.FC = () => {
       const app = new Application();
       await app.init({
         view: canvasRef.current,
-        backgroundAlpha: 0, // 确保背景透明
+        backgroundAlpha: 0,
         width: 200,
         height: 250,
         antialias: true,
@@ -78,6 +82,34 @@ const Live2DViewer: React.FC = () => {
     };
   }, []);
 
+  const parseErrorResponse = async (response: Response) => {
+    let errorMessage = `Request failed with status ${response.status}`;
+
+    try {
+      const errorData = await response.json();
+      if (typeof errorData?.details === "string" && errorData.details) {
+        return errorData.details;
+      }
+      if (typeof errorData?.error === "string" && errorData.error) {
+        return errorData.error;
+      }
+      if (typeof errorData?.message === "string" && errorData.message) {
+        return errorData.message;
+      }
+    } catch {
+      try {
+        const errorText = await response.text();
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      } catch {
+        // Keep the fallback message.
+      }
+    }
+
+    return errorMessage;
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim() || isTyping) return;
 
@@ -100,53 +132,74 @@ const Live2DViewer: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error("Network response was not ok");
+        throw new Error(await parseErrorResponse(response));
       }
 
       const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Chat response body is empty.");
+      }
+
       const decoder = new TextDecoder();
       let done = false;
+      let buffer = "";
       let accumulatedText = "";
 
-      if (reader) {
-        while (!done) {
-          const { value, done: doneReading } = await reader.read();
-          done = doneReading;
-          const chunkValue = decoder.decode(value);
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        buffer += decoder.decode(value, { stream: !doneReading });
 
-          const lines = chunkValue.split("\n");
-          for (const line of lines) {
-            if (line.startsWith("data:")) {
-              try {
-                const data = JSON.parse(line.slice(5));
-                if (data.conversation_id && !conversationId) {
-                  setConversationId(data.conversation_id);
-                  localStorage.setItem("l2d_conv_id", data.conversation_id);
-                }
-                if (
-                  data.event === "message" ||
-                  data.event === "agent_message"
-                ) {
-                  accumulatedText += data.answer;
-                  setReplyText(accumulatedText);
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
 
-                  if (accumulatedText.length % 20 === 0) {
-                    spriteRef.current?.startRandomMotion({
-                      group: "Motion",
-                      priority: 2,
-                    });
-                  }
-                }
-              } catch (e) {
-                console.log(e);
+        for (const eventChunk of events) {
+          const dataLines = eventChunk
+            .split("\n")
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.slice(5).trim())
+            .filter(Boolean);
+
+          if (!dataLines.length) {
+            continue;
+          }
+
+          try {
+            const data = JSON.parse(dataLines.join("\n"));
+
+            if (data.conversation_id) {
+              setConversationId(data.conversation_id);
+              localStorage.setItem("l2d_conv_id", data.conversation_id);
+            }
+
+            if (
+              (data.event === "message" || data.event === "agent_message") &&
+              typeof data.answer === "string"
+            ) {
+              accumulatedText += data.answer;
+              setReplyText(accumulatedText);
+
+              if (accumulatedText.length % 20 === 0) {
+                spriteRef.current?.startRandomMotion({
+                  group: "Motion",
+                  priority: 2,
+                });
               }
             }
+          } catch (e) {
+            console.log("Failed to parse SSE payload:", e, eventChunk);
           }
         }
       }
+
+      if (!accumulatedText.trim()) {
+        throw new Error(
+          "Dify returned no visible answer. Please check backend logs for /api/chat.",
+        );
+      }
     } catch (error) {
       console.log(error);
-      setReplyText("哎呀，出错了...");
+      setReplyText(error instanceof Error ? error.message : DEFAULT_ERROR_TEXT);
     } finally {
       setIsTyping(false);
     }
@@ -154,10 +207,10 @@ const Live2DViewer: React.FC = () => {
 
   const startNewChat = () => {
     setConversationId(null);
-    setReplyText("你好！让我们开始新的话题吧。");
+    localStorage.removeItem("l2d_conv_id");
+    setReplyText(NEW_CHAT_TEXT);
   };
 
-  // 切换对话显示/隐藏
   const toggleChatVisibility = () => {
     setIsChatVisible(!isChatVisible);
   };
@@ -167,9 +220,7 @@ const Live2DViewer: React.FC = () => {
     children?: ReactNode;
   }
 
-  // 自定义 Markdown 组件配置
   const markdownComponents: Components = {
-    // 自定义代码块样式
     code: ({ inline, className, children, ...props }: CodeProps) => {
       const match = /language-(\w+)/.exec(className || "");
       return !inline && match ? (
@@ -188,25 +239,21 @@ const Live2DViewer: React.FC = () => {
 
   return (
     <div className={style["live2d-container"]}>
-      {/* 始终渲染画布区域，通过 hidden 类控制可见性 */}
       <div
         className={`${style["canvas-area"]} ${!isVisible ? style.hidden : ""}`}
       >
-        {/* 聊天界面 - hover时显示 */}
         <div className={style["chat-interface"]}>
           <div className={style["chat-bubble-container"]}>
-            {/* 新对话按钮 */}
             {conversationId && (
               <button className={style["new-chat-btn"]} onClick={startNewChat}>
-                新对话
+                New Chat
               </button>
             )}
 
-            {/* 切换对话显示按钮 */}
             <button
               className={`${style["toggle-chat-btn"]} ${!isChatVisible ? style["hidden-state"] : ""}`}
               onClick={toggleChatVisibility}
-              title={isChatVisible ? "隐藏对话" : "显示对话"}
+              title={isChatVisible ? "Hide chat" : "Show chat"}
             >
               {isChatVisible ? (
                 <MessageSquareOff size={16} />
@@ -215,7 +262,6 @@ const Live2DViewer: React.FC = () => {
               )}
             </button>
 
-            {/* 对话气泡 - 根据 isChatVisible 控制显示 */}
             {(replyText || isTyping) && isChatVisible && (
               <div className={style["chat-bubble"]}>
                 {isTyping && !replyText ? (
@@ -238,48 +284,44 @@ const Live2DViewer: React.FC = () => {
               </div>
             )}
 
-            {/* 对话隐藏提示 */}
             {!isChatVisible && (
-              <div className={style["chat-hidden-hint"]}>对话已隐藏</div>
+              <div className={style["chat-hidden-hint"]}>Chat hidden</div>
             )}
           </div>
         </div>
 
-        {/* 画布包装器 */}
         <div className={style["canvas-wrapper"]}>
           <button
             className={style["close-btn"]}
             onClick={() => setIsVisible(false)}
-            title="关闭助手"
+            title="Close assistant"
           >
             <PowerOff size={16} />
           </button>
           <canvas ref={canvasRef} className={style["live2d-canvas"]} />
         </div>
 
-        {/* 输入框 - hover时显示 */}
         <div className={style["input-box"]}>
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-            placeholder={isTyping ? "正在输入..." : "和猫说点什么..."}
+            placeholder={isTyping ? "Thinking..." : "Say something..."}
             disabled={isTyping}
           />
           <button onClick={handleSendMessage} disabled={isTyping}>
-            {isTyping ? "..." : "发送"}
+            {isTyping ? "..." : "Send"}
           </button>
         </div>
       </div>
 
-      {/* 召唤标签 */}
       <div
         className={`${style["summon-tag"]} ${isVisible ? style.hidden : ""}`}
         onClick={() => setIsVisible(true)}
       >
         <Power size={20} />
-        <span>呼叫助手</span>
+        <span>Open Assistant</span>
       </div>
     </div>
   );
