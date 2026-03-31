@@ -12,8 +12,8 @@ import "katex/dist/katex.min.css";
 import type { Components } from "react-markdown";
 import type { ReactNode, HTMLAttributes } from "react";
 
-const DEFAULT_ERROR_TEXT = "Oops, something went wrong.";
-const NEW_CHAT_TEXT = "Hello! Let's start a new topic.";
+const DEFAULT_ERROR_TEXT = "哎呀，出错了。";
+const NEW_CHAT_TEXT = "你好！让我们开始一个新话题吧。";
 
 const Live2DViewer: React.FC = () => {
   const [isVisible, setIsVisible] = useState(true);
@@ -69,7 +69,7 @@ const Live2DViewer: React.FC = () => {
         }
       });
 
-      console.log("live2d init success");
+      console.log("live2d 初始化成功");
     };
 
     init();
@@ -83,7 +83,7 @@ const Live2DViewer: React.FC = () => {
   }, []);
 
   const parseErrorResponse = async (response: Response) => {
-    let errorMessage = `Request failed with status ${response.status}`;
+    let errorMessage = `请求失败，状态码 ${response.status}`;
 
     try {
       const errorData = await response.json();
@@ -137,7 +137,7 @@ const Live2DViewer: React.FC = () => {
 
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new Error("Chat response body is empty.");
+        throw new Error("聊天响应体为空");
       }
 
       const decoder = new TextDecoder();
@@ -187,14 +187,14 @@ const Live2DViewer: React.FC = () => {
               }
             }
           } catch (e) {
-            console.log("Failed to parse SSE payload:", e, eventChunk);
+            console.log("解析 SSE 数据失败:", e, eventChunk);
           }
         }
       }
 
       if (!accumulatedText.trim()) {
         throw new Error(
-          "Dify returned no visible answer. Please check backend logs for /api/chat.",
+          "Dify 未返回可见答案。请检查后端 /api/chat 的日志。",
         );
       }
     } catch (error) {
@@ -246,14 +246,14 @@ const Live2DViewer: React.FC = () => {
           <div className={style["chat-bubble-container"]}>
             {conversationId && (
               <button className={style["new-chat-btn"]} onClick={startNewChat}>
-                New Chat
+                新对话
               </button>
             )}
 
             <button
               className={`${style["toggle-chat-btn"]} ${!isChatVisible ? style["hidden-state"] : ""}`}
               onClick={toggleChatVisibility}
-              title={isChatVisible ? "Hide chat" : "Show chat"}
+              title={isChatVisible ? "隐藏聊天" : "显示聊天"}
             >
               {isChatVisible ? (
                 <MessageSquareOff size={16} />
@@ -294,7 +294,7 @@ const Live2DViewer: React.FC = () => {
           <button
             className={style["close-btn"]}
             onClick={() => setIsVisible(false)}
-            title="Close assistant"
+            title="关闭助手"
           >
             <PowerOff size={16} />
           </button>
@@ -307,11 +307,11 @@ const Live2DViewer: React.FC = () => {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-            placeholder={isTyping ? "Thinking..." : "Say something..."}
+            placeholder={isTyping ? "思考中..." : "说点什么..."}
             disabled={isTyping}
           />
           <button onClick={handleSendMessage} disabled={isTyping}>
-            {isTyping ? "..." : "Send"}
+            {isTyping ? "..." : "发送"}
           </button>
         </div>
       </div>
@@ -321,7 +321,7 @@ const Live2DViewer: React.FC = () => {
         onClick={() => setIsVisible(true)}
       >
         <Power size={20} />
-        <span>Open Assistant</span>
+        <span>打开助手</span>
       </div>
     </div>
   );

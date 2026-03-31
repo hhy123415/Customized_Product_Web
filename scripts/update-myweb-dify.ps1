@@ -28,5 +28,8 @@ if (Test-Path $difyOverride) {
   $difyComposeArgs += @("-f", $difyOverride)
 }
 
+docker compose @difyComposeArgs pull
 docker compose @difyComposeArgs up -d
+
+docker compose -f $mywebCompose pull postgres
 docker compose -f $mywebCompose up -d --build

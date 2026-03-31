@@ -1,6 +1,15 @@
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
+$difyDockerDir = Join-Path $root "dify_official\docker"
+$difyCompose = Join-Path $difyDockerDir "docker-compose.yaml"
+$difyOverride = Join-Path $difyDockerDir "docker-compose.override.yaml"
+$mywebCompose = Join-Path $root "docker-compose.yml"
 
-docker compose -f "$root\docker-compose.yml" down
-docker compose -f "$root\dify_official\docker\docker-compose.yaml" -f "$root\dify_official\docker\docker-compose.override.yaml" down
+$difyComposeArgs = @("-f", $difyCompose)
+if (Test-Path $difyOverride) {
+  $difyComposeArgs += @("-f", $difyOverride)
+}
+
+docker compose -f $mywebCompose down
+docker compose @difyComposeArgs down
