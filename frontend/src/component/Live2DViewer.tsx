@@ -4,6 +4,7 @@ import { Live2DSprite, Config } from "easy-live2d";
 import style from "../css/Live2D.module.css";
 import { Power, PowerOff, MessageCircle, MessageSquareOff } from "lucide-react";
 import api from "../api/axios";
+import { useAuth } from "../hooks/useAuth";
 
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
@@ -28,7 +29,13 @@ const Live2DViewer: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<Application | null>(null);
   const spriteRef = useRef<Live2DSprite | null>(null);
+  const { auth } = useAuth();
+  // 添加当前用户标识的存储
+  const [currentUser, setCurrentUser] = useState<string | null>(() => 
+    localStorage.getItem("l2d_current_user")
+  );
 
+  //l2d初始化
   useEffect(() => {
     const init = async () => {
       if (!canvasRef.current || appRef.current) return;
@@ -81,6 +88,38 @@ const Live2DViewer: React.FC = () => {
       }
     };
   }, []);
+
+  // 监听用户变化，自动清理对话
+  useEffect(() => {
+    const checkUserChange = () => {
+      const storedUser = localStorage.getItem("l2d_current_user");
+      const newUser = auth.user_id; // 从你的用户系统获取当前用户ID
+      
+      if (newUser !== storedUser) {
+        // 用户已切换，清理旧对话
+        localStorage.setItem("l2d_current_user", newUser);
+        localStorage.removeItem("l2d_conv_id");
+        setConversationId(null);
+        setReplyText(NEW_CHAT_TEXT);
+        setCurrentUser(newUser);
+      }
+    };
+
+    checkUserChange();
+    
+    // 监听 storage 事件，处理多标签页切换
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "l2d_current_user" && e.newValue !== currentUser) {
+        localStorage.removeItem("l2d_conv_id");
+        setConversationId(null);
+        setReplyText(NEW_CHAT_TEXT);
+        setCurrentUser(e.newValue);
+      }
+    };
+    
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [currentUser,auth]);
 
   const parseErrorResponse = async (response: Response) => {
     let errorMessage = `请求失败，状态码 ${response.status}`;
