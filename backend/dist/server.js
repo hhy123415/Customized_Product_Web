@@ -10,6 +10,9 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const axios_1 = __importDefault(require("axios"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const multer_1 = __importDefault(require("multer"));
 const auth_1 = require("./auth");
 const dataAccess_1 = require("./dataAccess");
 dotenv_1.default.config();
@@ -24,6 +27,7 @@ dataAccess_1.db
 })
     .catch((err) => console.error("数据库连接失败:", err));
 const app = (0, express_1.default)();
+app.set("trust proxy", 1);
 app.use((0, cookie_parser_1.default)());
 const allowedOrigins = ["http://localhost:3000"];
 app.use((0, cors_1.default)({
@@ -31,6 +35,30 @@ app.use((0, cors_1.default)({
     credentials: true,
 }));
 app.use(express_1.default.json());
+const UPLOAD_DIR = path_1.default.resolve(process.cwd(), "uploads");
+if (!fs_1.default.existsSync(UPLOAD_DIR)) {
+    fs_1.default.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+const imageStorage = multer_1.default.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+    filename: (_req, file, cb) => {
+        const ext = path_1.default.extname(file.originalname).toLowerCase();
+        const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+        cb(null, uniqueName);
+    },
+});
+const uploadImage = (0, multer_1.default)({
+    storage: imageStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        if (file.mimetype.startsWith("image/")) {
+            cb(null, true);
+            return;
+        }
+        cb(new Error("Only image files are allowed"));
+    },
+});
+app.use("/uploads", express_1.default.static(UPLOAD_DIR));
 const SECRET_KEY = process.env.JWT_SECRET || "";
 app.get("/api/me", auth_1.authenticateToken, async (req, res) => {
     res.json({
@@ -58,6 +86,7 @@ app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
                 username: req.user?.username,
                 role: req.user?.role,
                 email: user.email,
+                img_path: user.img_path || null,
             },
         });
     }
@@ -66,6 +95,54 @@ app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             message: "服务器内部错误",
+        });
+    }
+});
+app.put("/api/my_info/avatar", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    const { img_path } = req.body;
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    if (img_path !== null && typeof img_path !== "string") {
+        return res.status(400).json({
+            success: false,
+            message: "img_path must be string or null",
+        });
+    }
+    if (typeof img_path === "string" && !img_path.startsWith("/uploads/")) {
+        return res.status(400).json({
+            success: false,
+            message: "img_path must be under /uploads/",
+        });
+    }
+    try {
+        const updatedUser = await dataAccess_1.db.updateUserImagePathById(userId, img_path ?? null);
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+        return res.json({
+            success: true,
+            message: "Avatar updated successfully",
+            user: {
+                username: updatedUser.username,
+                role: updatedUser.role,
+                email: updatedUser.email,
+                img_path: updatedUser.img_path || null,
+            },
+        });
+    }
+    catch (err) {
+        console.error("update avatar error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
         });
     }
 });
@@ -241,6 +318,43 @@ app.get("/api/posts", auth_1.authenticateToken, async (req, res) => {
             message: "服务器内部错误",
         });
     }
+});
+app.post("/api/images/upload", auth_1.authenticateToken, uploadImage.single("image"), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({
+            success: false,
+            message: "No image file uploaded",
+        });
+    }
+    const relativePath = `/uploads/${req.file.filename}`;
+    const imageUrl = `${req.protocol}://${req.get("host")}${relativePath}`;
+    res.status(201).json({
+        success: true,
+        message: "Image uploaded successfully",
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        path: relativePath,
+        url: imageUrl,
+    });
+});
+app.use((err, _req, res, next) => {
+    if (err instanceof multer_1.default.MulterError) {
+        return res.status(400).json({
+            success: false,
+            message: err.code === "LIMIT_FILE_SIZE"
+                ? "Image size cannot exceed 5MB"
+                : "Upload failed",
+        });
+    }
+    if (err.message === "Only image files are allowed") {
+        return res.status(400).json({
+            success: false,
+            message: err.message,
+        });
+    }
+    next(err);
 });
 app.post("/api/chat", auth_1.authenticateToken, async (req, res) => {
     try {

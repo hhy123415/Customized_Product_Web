@@ -40,6 +40,8 @@ services:
         condition: service_healthy
     ports:
       - "3001:3001"
+    volumes:
+      - ./backend/uploads:/app/uploads
     networks:
       - default
       - myweb_dify_shared

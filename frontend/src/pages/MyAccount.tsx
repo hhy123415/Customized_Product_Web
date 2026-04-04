@@ -1,43 +1,31 @@
+﻿import { useEffect, useState } from "react";
+import api from "../api/axios";
 import styles from "../css/MyAccount.module.css";
 import type { User_info } from "../Interface";
-import { useState, useEffect } from "react";
-import api from "../api/axios";
 
-
-// 定义角色名称的映射
-const roleDisplayMap: { [key: string]: string } = {
+const roleDisplayMap: Record<string, string> = {
   regular: "普通用户",
   enterprise: "企业用户",
   admin: "管理员",
-  // 可以添加更多角色
 };
 
 function MyAccount() {
   const [userInfo, setUserInfo] = useState<User_info | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const [uploadMessage, setUploadMessage] = useState<string>("");
 
   useEffect(() => {
     const fetchUserInfo = async () => {
       try {
-        setLoading(true); // 开始加载时设置 loading 为 true
-        setError(null);   // 清除之前的错误信息
+        setLoading(true);
+        setError(null);
 
         const res = await api.get("/my_info");
-
-        if (!res.data.success) {
-          // 处理非成功响应，例如 401 Unauthorized, 403 Forbidden
-          if (res.status === 401 || res.status === 403) {
-            setError("您未登录或会话已过期，请重新登录。");
-          } else {
-            throw new Error(`HTTP error! status: ${res.status}`);
-          }
-        }
-
         if (res.data.success) {
           setUserInfo(res.data.user);
         } else {
-          // 后端返回 success: false 的情况
           setError(res.data.message || "获取用户信息失败。");
         }
       } catch (err) {
@@ -49,7 +37,45 @@ function MyAccount() {
     };
 
     fetchUserInfo();
-  }, []); // 空依赖数组表示此 useEffect 只会在组件挂载时运行一次
+  }, []);
+
+  const handleAvatarUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadMessage("");
+
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const uploadRes = await api.post("/images/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (!uploadRes.data?.success || !uploadRes.data?.path) {
+        throw new Error(uploadRes.data?.message || "图片上传失败");
+      }
+
+      const avatarPath = uploadRes.data.path as string;
+      const updateRes = await api.put("/my_info/avatar", { img_path: avatarPath });
+      if (!updateRes.data?.success) {
+        throw new Error(updateRes.data?.message || "头像保存失败");
+      }
+
+      setUserInfo((prev) => (prev ? { ...prev, img_path: avatarPath } : prev));
+      setUploadMessage("头像更新成功");
+    } catch (err) {
+      console.error("Avatar upload error:", err);
+      setUploadMessage("头像上传失败，请稍后重试");
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  };
 
   if (loading) {
     return (
@@ -68,7 +94,6 @@ function MyAccount() {
     );
   }
 
-  // userInfo 为 null 也是一种错误情况
   if (!userInfo) {
     return (
       <div className={styles.container}>
@@ -77,10 +102,26 @@ function MyAccount() {
     );
   }
 
+  const avatarSrc = userInfo.img_path || "/default-avatar.png";
+
   return (
     <div className={styles.container}>
       <h2>我的账户</h2>
       <div className={styles.userInfoCard}>
+        <div className={styles.avatarSection}>
+          <img src={avatarSrc} alt="用户头像" className={styles.avatarImage} />
+          <label className={styles.avatarUploadButton}>
+            {uploading ? "上传中..." : "修改头像"}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              className={styles.hiddenInput}
+              disabled={uploading}
+            />
+          </label>
+          {uploadMessage && <p className={styles.uploadMessage}>{uploadMessage}</p>}
+        </div>
         <p>
           <strong>用户名:</strong> {userInfo.username}
         </p>
@@ -88,12 +129,11 @@ function MyAccount() {
           <strong>用户邮箱:</strong> {userInfo.email}
         </p>
         <p>
-          <strong>账号类型:</strong> {roleDisplayMap[userInfo.role]}
+          <strong>账号类型:</strong> {roleDisplayMap[userInfo.role] || userInfo.role}
         </p>
       </div>
     </div>
   );
 }
-
 
 export default MyAccount;

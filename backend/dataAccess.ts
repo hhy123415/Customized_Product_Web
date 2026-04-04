@@ -75,6 +75,17 @@ export const db = {
     return result.rows[0] ?? null;
   },
 
+  async updateUserImagePathById(
+    userId: string,
+    imgPath: string | null,
+  ): Promise<UserRow | null> {
+    const result = await pool.query<UserRow>(
+      "UPDATE users SET img_path = $1 WHERE user_id = $2 RETURNING *",
+      [imgPath, userId],
+    );
+    return result.rows[0] ?? null;
+  },
+
   async getPostsWithAuthor(): Promise<PostRow[]> {
     const result = await pool.query<PostRow>(`
       SELECT

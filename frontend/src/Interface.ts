@@ -2,6 +2,7 @@ export interface User_info {
   username: string;
   email: string;
   role: string;
+  img_path?: string | null;
 }
 
 // 定义帖子的类型，与后端数据结构对应

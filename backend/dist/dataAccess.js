@@ -40,6 +40,10 @@ exports.db = {
         const result = await pool.query("UPDATE users SET password_hash = $1 WHERE username = $2 RETURNING *", [passwordHash, username]);
         return result.rows[0] ?? null;
     },
+    async updateUserImagePathById(userId, imgPath) {
+        const result = await pool.query("UPDATE users SET img_path = $1 WHERE user_id = $2 RETURNING *", [imgPath, userId]);
+        return result.rows[0] ?? null;
+    },
     async getPostsWithAuthor() {
         const result = await pool.query(`
       SELECT

@@ -1,10 +1,13 @@
-import express, { Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import axios from "axios";
+import fs from "fs";
+import path from "path";
+import multer from "multer";
 import { authenticateToken } from "./auth";
 import { db } from "./dataAccess";
 
@@ -23,6 +26,7 @@ db
   .catch((err) => console.error("数据库连接失败:", err));
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(cookieParser());
 
 const allowedOrigins = ["http://localhost:3000"];
@@ -33,6 +37,34 @@ app.use(
   }),
 );
 app.use(express.json());
+
+const UPLOAD_DIR = path.resolve(process.cwd(), "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const imageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, uniqueName);
+  },
+});
+
+const uploadImage = multer({
+  storage: imageStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only image files are allowed"));
+  },
+});
+
+app.use("/uploads", express.static(UPLOAD_DIR));
 
 const SECRET_KEY = process.env.JWT_SECRET || "";
 
@@ -66,6 +98,7 @@ app.get("/api/my_info", authenticateToken, async (req: Request, res: Response) =
         username: req.user?.username,
         role: req.user?.role,
         email: user.email,
+        img_path: user.img_path || null,
       },
     });
   } catch (err) {
@@ -73,6 +106,60 @@ app.get("/api/my_info", authenticateToken, async (req: Request, res: Response) =
     res.status(500).json({
       success: false,
       message: "服务器内部错误",
+    });
+  }
+});
+
+app.put("/api/my_info/avatar", authenticateToken, async (req: Request, res: Response) => {
+  const userId = req.user?.user_id;
+  const { img_path } = req.body as { img_path?: string | null };
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    });
+  }
+
+  if (img_path !== null && typeof img_path !== "string") {
+    return res.status(400).json({
+      success: false,
+      message: "img_path must be string or null",
+    });
+  }
+
+  if (typeof img_path === "string" && !img_path.startsWith("/uploads/")) {
+    return res.status(400).json({
+      success: false,
+      message: "img_path must be under /uploads/",
+    });
+  }
+
+  try {
+    const updatedUser = await db.updateUserImagePathById(userId, img_path ?? null);
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Avatar updated successfully",
+      user: {
+        username: updatedUser.username,
+        role: updatedUser.role,
+        email: updatedUser.email,
+        img_path: updatedUser.img_path || null,
+      },
+    });
+  } catch (err) {
+    console.error("update avatar error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 });
@@ -279,6 +366,55 @@ app.get("/api/posts", authenticateToken, async (req: Request, res: Response) => 
       message: "服务器内部错误",
     });
   }
+});
+
+app.post(
+  "/api/images/upload",
+  authenticateToken,
+  uploadImage.single("image"),
+  async (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No image file uploaded",
+      });
+    }
+
+    const relativePath = `/uploads/${req.file.filename}`;
+    const imageUrl = `${req.protocol}://${req.get("host")}${relativePath}`;
+
+    res.status(201).json({
+      success: true,
+      message: "Image uploaded successfully",
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      path: relativePath,
+      url: imageUrl,
+    });
+  },
+);
+
+app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      success: false,
+      message:
+        err.code === "LIMIT_FILE_SIZE"
+          ? "Image size cannot exceed 5MB"
+          : "Upload failed",
+    });
+  }
+
+  if (err.message === "Only image files are allowed") {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+    });
+  }
+
+  next(err);
 });
 
 app.post("/api/chat", authenticateToken, async (req: Request, res: Response) => {

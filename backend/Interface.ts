@@ -12,11 +12,7 @@ export interface HotelRow {
   user_id: number;
 }
 
-enum Role {
-  "regular",
-  "enterprise",
-  "admin",
-}
+type Role = "regular" | "enterprise" | "admin";
 
 export interface UserRow {
   user_id?: string;
@@ -24,6 +20,7 @@ export interface UserRow {
   password_hash: string;
   email: string;
   role: Role;
+  img_path?: string | null;
 }
 
 export interface PostRow {
