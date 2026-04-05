@@ -30,10 +30,22 @@
 }
 
 .welcome-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
   margin-right: auto;
   font-size: 1.1rem;
   font-weight: 500;
   color: #f0f0f0;
+}
+
+.user-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: #e8e8e8;
 }
 
 .logout-button {

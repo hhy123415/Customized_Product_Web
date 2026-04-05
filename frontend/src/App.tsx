@@ -9,6 +9,7 @@ import MyAccount from "./pages/MyAccount";
 import UserRoute from "./component/UserRoute";
 import Forget from "./pages/ForgetPassword";
 import Square from "./pages/CreativeSquare";
+import PostDetailPage from "./pages/PostDetail";
 import ProductCustomization from "./pages/ProductCustomization";
 import PoolCueCustomization from "./pages/PoolCueCustomization";
 import Live2DViewer from "./component/Live2DViewer";
@@ -31,9 +32,38 @@ const AppContent = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forget_password" element={<Forget />} />
-        <Route path="/CreativeSquare" element={<Square />} />
-        <Route path="/product-customization" element={<ProductCustomization />} />
-        <Route path="/product-customization/pool-cue" element={<PoolCueCustomization />} />
+        <Route
+          path="/CreativeSquare"
+          element={
+            <UserRoute>
+              <Square />
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/posts/:postId"
+          element={
+            <UserRoute>
+              <PostDetailPage />
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/product-customization"
+          element={
+            <UserRoute>
+              <ProductCustomization />
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/product-customization/pool-cue"
+          element={
+            <UserRoute>
+              <PoolCueCustomization />
+            </UserRoute>
+          }
+        />
         <Route
           path="/my_account"
           element={

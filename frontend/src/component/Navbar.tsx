@@ -6,6 +6,7 @@ function NavBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { auth, logout } = useAuth();
+  const avatarSrc = auth.img_path || "/default-avatar.png";
 
   const handleLogout = () => {
     logout();
@@ -47,6 +48,11 @@ function NavBar() {
             <>
               <li className={styles["welcome-message"]}>
                 欢迎回来，{auth.role === "admin" ? "管理员" : "用户"}{" "}
+                <img
+                  src={avatarSrc}
+                  alt="用户头像"
+                  className={styles["user-avatar"]}
+                />
                 <span style={{ fontWeight: "bold", color: "orange" }}>
                   {auth.username}
                 </span>

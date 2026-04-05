@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import type { PostRow, UserRow } from "./Interface";
+import type { CommentRow, PostDetailRow, PostRow, UserRow } from "./Interface";
 
 const pool = new Pool({
   user: process.env.DB_USER,
@@ -95,11 +95,132 @@ export const db = {
         p.reply_count,
         p.created_at,
         p.updated_at,
-        u.username AS author_username
+        u.username AS author_username,
+        u.img_path AS author_img_path
       FROM posts p
       JOIN users u ON p.user_id = u.user_id
       ORDER BY p.created_at DESC
     `);
     return result.rows;
+  },
+
+  async createPost(params: {
+    userId: string;
+    title: string;
+    content: string;
+  }): Promise<PostRow> {
+    const { userId, title, content } = params;
+    const result = await pool.query<PostRow>(
+      `
+        INSERT INTO posts (user_id, title, content)
+        VALUES ($1, $2, $3)
+        RETURNING post_id, title, content, reply_count, created_at, updated_at
+      `,
+      [userId, title, content],
+    );
+
+    const inserted = result.rows[0];
+    const postWithAuthor = await pool.query<PostRow>(
+      `
+        SELECT
+          p.post_id,
+          p.title,
+          p.content,
+          p.reply_count,
+          p.created_at,
+          p.updated_at,
+          u.username AS author_username,
+          u.img_path AS author_img_path
+        FROM posts p
+        JOIN users u ON p.user_id = u.user_id
+        WHERE p.post_id = $1
+      `,
+      [inserted.post_id],
+    );
+
+    return postWithAuthor.rows[0];
+  },
+
+  async getPostDetailById(postId: string): Promise<PostDetailRow | null> {
+    const result = await pool.query<PostDetailRow>(
+      `
+        SELECT
+          p.post_id,
+          p.title,
+          p.content,
+          p.reply_count,
+          p.created_at,
+          p.updated_at,
+          u.user_id AS author_user_id,
+          u.username AS author_username,
+          u.img_path AS author_img_path
+        FROM posts p
+        JOIN users u ON p.user_id = u.user_id
+        WHERE p.post_id = $1
+      `,
+      [postId],
+    );
+
+    return result.rows[0] ?? null;
+  },
+
+  async getCommentsByPostId(postId: string): Promise<CommentRow[]> {
+    const result = await pool.query<CommentRow>(
+      `
+        SELECT
+          c.comment_id,
+          c.post_id,
+          c.content,
+          c.created_at,
+          c.updated_at,
+          u.user_id AS author_user_id,
+          u.username AS author_username,
+          u.img_path AS author_img_path
+        FROM comments c
+        JOIN users u ON c.user_id = u.user_id
+        WHERE c.post_id = $1
+        ORDER BY c.created_at ASC, c.comment_id ASC
+      `,
+      [postId],
+    );
+
+    return result.rows;
+  },
+
+  async createComment(params: {
+    postId: string;
+    userId: string;
+    content: string;
+  }): Promise<CommentRow> {
+    const { postId, userId, content } = params;
+    const result = await pool.query<CommentRow>(
+      `
+        INSERT INTO comments (post_id, user_id, content)
+        VALUES ($1, $2, $3)
+        RETURNING comment_id, post_id, content, created_at, updated_at
+      `,
+      [postId, userId, content],
+    );
+
+    const inserted = result.rows[0];
+    const commentWithAuthor = await pool.query<CommentRow>(
+      `
+        SELECT
+          c.comment_id,
+          c.post_id,
+          c.content,
+          c.created_at,
+          c.updated_at,
+          u.user_id AS author_user_id,
+          u.username AS author_username,
+          u.img_path AS author_img_path
+        FROM comments c
+        JOIN users u ON c.user_id = u.user_id
+        WHERE c.comment_id = $1
+      `,
+      [inserted.comment_id],
+    );
+
+    return commentWithAuthor.rows[0];
   },
 };

@@ -2,6 +2,7 @@
 import api from "../api/axios";
 import styles from "../css/MyAccount.module.css";
 import type { User_info } from "../Interface";
+import { useAuth } from "../hooks/useAuth";
 
 const roleDisplayMap: Record<string, string> = {
   regular: "普通用户",
@@ -10,6 +11,7 @@ const roleDisplayMap: Record<string, string> = {
 };
 
 function MyAccount() {
+  const { updateAvatar } = useAuth();
   const [userInfo, setUserInfo] = useState<User_info | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +69,7 @@ function MyAccount() {
       }
 
       setUserInfo((prev) => (prev ? { ...prev, img_path: avatarPath } : prev));
+      updateAvatar(avatarPath);
       setUploadMessage("头像更新成功");
     } catch (err) {
       console.error("Avatar upload error:", err);

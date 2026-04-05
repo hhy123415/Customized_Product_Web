@@ -1,6 +1,6 @@
 //需要登录访问
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 interface UserRouteProps {
@@ -9,9 +9,10 @@ interface UserRouteProps {
 
 const UserRoute: React.FC<UserRouteProps> = ({ children }) => {
   const { auth } = useAuth();
+  const location = useLocation();
 
   if (!auth.isLoggedIn) {
-    return <Navigate to="/" />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;

@@ -15,6 +15,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       user_id: "",
       username: "",
       role: "regular",
+      img_path: null,
     };
   });
 
@@ -32,6 +33,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
             user_id: res.data.user.user_id,
             username: res.data.user.username,
             role: res.data.user.role,
+            img_path: res.data.user.img_path ?? null,
           });
         }
       } catch (err) {
@@ -41,6 +43,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           user_id: "",
           username: "",
           role: "regular",
+          img_path: null,
         });
       } finally {
         setLoading(false);
@@ -49,8 +52,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     checkAuthStatus();
   }, []);
 
-  const login = (user_id: string, username: string, role: string) => {
-    setAuth({ isLoggedIn: true, user_id, username, role });
+  const login = (
+    user_id: string,
+    username: string,
+    role: string,
+    img_path: string | null = null,
+  ) => {
+    setAuth({ isLoggedIn: true, user_id, username, role, img_path });
+  };
+
+  const updateAvatar = (img_path: string | null) => {
+    setAuth((prev) => ({ ...prev, img_path }));
   };
 
   const logout = async () => {
@@ -62,11 +74,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         user_id: "",
         username: "",
         role: "regular",
+        img_path: null,
       });
     }
   };
 
-  const value: AuthContextType = { auth, login, logout };
+  const value: AuthContextType = { auth, login, updateAvatar, logout };
 
   // 如果还在加载中，显示一个加载指示器
   if (loading) {

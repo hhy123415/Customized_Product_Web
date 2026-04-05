@@ -31,4 +31,28 @@ export interface PostRow {
   created_at: string;
   updated_at: string;
   author_username: string;
+  author_img_path?: string | null;
+}
+
+export interface PostDetailRow {
+  post_id: string;
+  title: string;
+  content: string;
+  reply_count: number;
+  created_at: string;
+  updated_at: string;
+  author_user_id: string;
+  author_username: string;
+  author_img_path?: string | null;
+}
+
+export interface CommentRow {
+  comment_id: string;
+  post_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  author_user_id: string;
+  author_username: string;
+  author_img_path?: string | null;
 }

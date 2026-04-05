@@ -61,14 +61,38 @@ const uploadImage = (0, multer_1.default)({
 app.use("/uploads", express_1.default.static(UPLOAD_DIR));
 const SECRET_KEY = process.env.JWT_SECRET || "";
 app.get("/api/me", auth_1.authenticateToken, async (req, res) => {
-    res.json({
-        success: true,
-        user: {
-            user_id: req.user?.user_id,
-            username: req.user?.username,
-            role: req.user?.role,
-        },
-    });
+    const userId = req.user?.user_id;
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    try {
+        const user = await dataAccess_1.db.getUserById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+        return res.json({
+            success: true,
+            user: {
+                user_id: user.user_id,
+                username: user.username,
+                role: user.role,
+                img_path: user.img_path || null,
+            },
+        });
+    }
+    catch (err) {
+        console.error("me error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
 });
 app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
     const userId = req.user?.user_id;
@@ -238,6 +262,7 @@ app.post("/api/login", async (req, res) => {
             user_id: user.user_id,
             user_name: user.username,
             role: user.role,
+            img_path: user.img_path || null,
         });
     }
     catch (err) {
@@ -316,6 +341,132 @@ app.get("/api/posts", auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             message: "服务器内部错误",
+        });
+    }
+});
+app.post("/api/posts", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    const { title, content } = req.body;
+    const trimmedTitle = (title || "").trim();
+    const trimmedContent = (content || "").trim();
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    if (!trimmedTitle || !trimmedContent) {
+        return res.status(400).json({
+            success: false,
+            message: "title and content are required",
+        });
+    }
+    if (trimmedTitle.length > 255) {
+        return res.status(400).json({
+            success: false,
+            message: "title is too long (max 255)",
+        });
+    }
+    try {
+        const post = await dataAccess_1.db.createPost({
+            userId,
+            title: trimmedTitle,
+            content: trimmedContent,
+        });
+        return res.status(201).json({
+            success: true,
+            message: "Post created",
+            post,
+        });
+    }
+    catch (err) {
+        console.error("create post error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+});
+app.get("/api/posts/:postId", auth_1.authenticateToken, async (req, res) => {
+    const rawPostId = req.params.postId;
+    const postId = Array.isArray(rawPostId) ? rawPostId[0] : rawPostId;
+    if (!postId) {
+        return res.status(400).json({
+            success: false,
+            message: "postId is required",
+        });
+    }
+    try {
+        const post = await dataAccess_1.db.getPostDetailById(postId);
+        if (!post) {
+            return res.status(404).json({
+                success: false,
+                message: "Post not found",
+            });
+        }
+        const comments = await dataAccess_1.db.getCommentsByPostId(postId);
+        return res.json({
+            success: true,
+            post,
+            comments,
+        });
+    }
+    catch (err) {
+        console.error("get post detail error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+});
+app.post("/api/posts/:postId/comments", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    const rawPostId = req.params.postId;
+    const postId = Array.isArray(rawPostId) ? rawPostId[0] : rawPostId;
+    const { content } = req.body;
+    const trimmedContent = (content || "").trim();
+    if (!postId) {
+        return res.status(400).json({
+            success: false,
+            message: "postId is required",
+        });
+    }
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    if (!trimmedContent) {
+        return res.status(400).json({
+            success: false,
+            message: "content is required",
+        });
+    }
+    try {
+        const post = await dataAccess_1.db.getPostDetailById(postId);
+        if (!post) {
+            return res.status(404).json({
+                success: false,
+                message: "Post not found",
+            });
+        }
+        const comment = await dataAccess_1.db.createComment({
+            postId,
+            userId,
+            content: trimmedContent,
+        });
+        return res.status(201).json({
+            success: true,
+            message: "Comment created",
+            comment,
+        });
+    }
+    catch (err) {
+        console.error("create comment error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
         });
     }
 });

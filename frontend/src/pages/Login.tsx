@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ChangeEvent, SubmitEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import style from "../css/Login.module.css";
 import axios, { AxiosError } from "axios";
 import { useAuth } from "../hooks/useAuth";
@@ -23,6 +23,7 @@ interface LoginResponse {
   user_id?: string;
   user_name?: string;
   role?: string;
+  img_path?: string | null;
 }
 
 function Login() {
@@ -33,7 +34,10 @@ function Login() {
   const [errors, setErrors] = useState<Errors>({}); //登录错误
   const [isLoading, setIsLoading] = useState<boolean>(false); //加载状态
   const navigate = useNavigate(); //导航跳转
+  const location = useLocation();
   const { login } = useAuth();
+  const redirectPath =
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || "/";
 
   // 处理表单数据改变
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -97,9 +101,10 @@ function Login() {
           response.data.user_id ?? "", //空时默认为空
           formData.username,
           response.data.role ?? "",
+          response.data.img_path ?? null,
         );
         alert(`欢迎回来，${response.data.user_name}!`);
-        navigate("/");
+        navigate(redirectPath, { replace: true });
       } else {
         alert("登录失败！");
         setErrors({ submit: response.data.message || "登录失败" });
