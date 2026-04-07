@@ -56,3 +56,14 @@ export interface CommentRow {
   author_username: string;
   author_img_path?: string | null;
 }
+
+export interface EmailVerificationCodeRow {
+  id: string;
+  email: string;
+  code: string;
+  created_at: string;
+  expires_at: string;
+  used: boolean;
+  ip_address?: string | null;
+  user_agent?: string | null;
+}

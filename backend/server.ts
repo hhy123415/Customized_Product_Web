@@ -8,6 +8,7 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
+import nodemailer from "nodemailer";
 import { authenticateToken } from "./auth";
 import { db } from "./dataAccess";
 
@@ -15,8 +16,71 @@ dotenv.config();
 
 const DIFY_API_KEY = process.env.DIFY_API_KEY;
 const DIFY_API_URL = process.env.DIFY_API_URL;
+const DIFY_CHAT_TIMEOUT_MS = Number(process.env.DIFY_CHAT_TIMEOUT_MS || 45000);
 const ENTERPRISE_REGISTER_CODE = process.env.ENTERPRISE_REGISTER_CODE || "6666";
 const ADMIN_REGISTER_CODE = process.env.ADMIN_REGISTER_CODE || "8888";
+
+// 邮件发送配置
+const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
+const EMAIL_FROM = process.env.EMAIL_FROM || SMTP_USER;
+
+// 验证码配置
+const VERIFICATION_CODE_EXPIRY_MINUTES = parseInt(process.env.VERIFICATION_CODE_EXPIRY_MINUTES || "10", 10);
+const MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES = parseInt(process.env.MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES || "3", 10);
+
+// 创建邮件传输器
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+    },
+  });
+};
+
+// 生成6位数字验证码
+const generateVerificationCode = (): string => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// 发送验证码邮件
+const sendVerificationEmail = async (email: string, code: string): Promise<boolean> => {
+  try {
+    const transporter = createTransporter();
+
+    const mailOptions = {
+      from: EMAIL_FROM,
+      to: email,
+      subject: "邮箱验证码 - 您的网站",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+          <h2 style="color: #333; text-align: center;">邮箱验证码</h2>
+          <p style="color: #666; font-size: 16px;">您好！</p>
+          <p style="color: #666; font-size: 16px;">您正在注册我们的网站，验证码为：</p>
+          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 24px; font-weight: bold; color: #333; letter-spacing: 5px;">${code}</span>
+          </div>
+          <p style="color: #666; font-size: 16px;">验证码有效期为 ${VERIFICATION_CODE_EXPIRY_MINUTES} 分钟，请尽快使用。</p>
+          <p style="color: #666; font-size: 16px;">如果您没有进行此操作，请忽略此邮件。</p>
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+          <p style="color: #999; font-size: 14px; text-align: center;">此邮件由系统自动发送，请勿回复。</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error("发送验证码邮件失败:", error);
+    return false;
+  }
+};
 
 db
   .checkConnection()
@@ -191,8 +255,127 @@ app.put("/api/my_info/avatar", authenticateToken, async (req: Request, res: Resp
   }
 });
 
+// 发送邮箱验证码
+app.post("/api/send-verification-code", async (req: Request, res: Response) => {
+  const { email } = req.body;
+  const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  const userAgent = req.headers['user-agent'];
+
+  try {
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "邮箱地址不能为空",
+      });
+    }
+
+    // 验证邮箱格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "邮箱格式不正确",
+      });
+    }
+
+    // 检查邮箱是否已被注册
+    const emailExists = await db.getUserByEmail(email);
+    if (emailExists) {
+      return res.status(409).json({
+        success: false,
+        message: "该邮箱已被注册",
+      });
+    }
+
+    // 检查最近10分钟内的验证码发送次数
+    const recentAttempts = await db.getRecentVerificationAttempts(email);
+    if (recentAttempts >= MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES) {
+      return res.status(429).json({
+        success: false,
+        message: "验证码发送过于频繁，请稍后再试",
+      });
+    }
+
+    // 生成验证码
+    const code = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + VERIFICATION_CODE_EXPIRY_MINUTES * 60 * 1000);
+
+    // 保存验证码到数据库
+    await db.createVerificationCode({
+      email,
+      code,
+      expiresAt,
+      ipAddress: typeof ipAddress === 'string' ? ipAddress : undefined,
+      userAgent,
+    });
+
+    // 发送验证码邮件
+    const emailSent = await sendVerificationEmail(email, code);
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: "验证码发送失败，请稍后重试",
+      });
+    }
+
+    // 清理过期验证码
+    await db.cleanupExpiredVerificationCodes();
+
+    res.json({
+      success: true,
+      message: "验证码已发送到您的邮箱",
+      expiresIn: VERIFICATION_CODE_EXPIRY_MINUTES * 60, // 返回秒数
+    });
+  } catch (err) {
+    console.error("发送验证码错误:", err);
+    res.status(500).json({
+      success: false,
+      message: "服务器内部错误",
+    });
+  }
+});
+
+// 验证邮箱验证码
+app.post("/api/verify-email-code", async (req: Request, res: Response) => {
+  const { email, code } = req.body;
+
+  try {
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        message: "邮箱和验证码不能为空",
+      });
+    }
+
+    // 获取有效的验证码
+    const verificationCode = await db.getValidVerificationCode(email, code);
+
+    if (!verificationCode) {
+      return res.status(400).json({
+        success: false,
+        message: "验证码无效或已过期",
+      });
+    }
+
+    // 标记验证码为已使用
+    await db.markVerificationCodeAsUsed(verificationCode.id);
+
+    res.json({
+      success: true,
+      message: "邮箱验证成功",
+    });
+  } catch (err) {
+    console.error("验证验证码错误:", err);
+    res.status(500).json({
+      success: false,
+      message: "服务器内部错误",
+    });
+  }
+});
+
 app.post("/api/register", async (req: Request, res: Response) => {
-  const { username, password, email, registerCode, role } = req.body;
+  const { username, password, email, registerCode, role, verificationCode } = req.body;
   const allowedRoles = ["regular", "enterprise", "admin"];
 
   try {
@@ -200,6 +383,22 @@ app.post("/api/register", async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: "用户类型无效",
+      });
+    }
+
+    // 验证邮箱验证码
+    if (!verificationCode) {
+      return res.status(400).json({
+        success: false,
+        message: "验证码不能为空",
+      });
+    }
+
+    const validVerificationCode = await db.getValidVerificationCode(email, verificationCode);
+    if (!validVerificationCode) {
+      return res.status(400).json({
+        success: false,
+        message: "验证码无效或已过期",
       });
     }
 
@@ -235,6 +434,9 @@ app.post("/api/register", async (req: Request, res: Response) => {
         message: "管理员注册码错误",
       });
     }
+
+    // 标记验证码为已使用
+    await db.markVerificationCodeAsUsed(validVerificationCode.id);
 
     await db.createUser({
       username,
@@ -623,8 +825,10 @@ app.post("/api/chat", authenticateToken, async (req: Request, res: Response) => 
         headers: {
           Authorization: `Bearer ${DIFY_API_KEY}`,
           "Content-Type": "application/json",
+          Accept: "text/event-stream",
         },
         responseType: "stream",
+        timeout: DIFY_CHAT_TIMEOUT_MS,
         validateStatus: () => true,
       },
     );
@@ -647,11 +851,40 @@ app.post("/api/chat", authenticateToken, async (req: Request, res: Response) => 
     }
 
     response.data.pipe(res);
+    response.data.on("error", (streamError: unknown) => {
+      console.error("Dify stream error:", streamError);
+      if (!res.headersSent) {
+        res.status(502).json({
+          error: "Dify stream error",
+          details:
+            streamError instanceof Error ? streamError.message : "Unknown stream error",
+        });
+      } else {
+        res.end();
+      }
+    });
+
     response.data.on("end", () => {
       res.end();
     });
   } catch (error) {
     console.error("Dify logic error:", error);
+    if (axios.isAxiosError(error)) {
+      if (error.code === "ECONNABORTED") {
+        res.status(504).json({
+          error: "Dify upstream timeout",
+          details: `No response from Dify within ${DIFY_CHAT_TIMEOUT_MS}ms.`,
+        });
+        return;
+      }
+
+      res.status(502).json({
+        error: "Dify request failed",
+        details: error.message,
+      });
+      return;
+    }
+
     res.status(500).json({
       error: "Dify logic error",
       details: error instanceof Error ? error.message : "Unknown backend error",

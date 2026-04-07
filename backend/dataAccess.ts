@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import type { CommentRow, PostDetailRow, PostRow, UserRow } from "./Interface";
+import type { CommentRow, PostDetailRow, PostRow, UserRow, EmailVerificationCodeRow } from "./Interface";
 
 const pool = new Pool({
   user: process.env.DB_USER,
@@ -222,5 +222,60 @@ export const db = {
     );
 
     return commentWithAuthor.rows[0];
+  },
+
+  // 邮箱验证码相关操作
+  async createVerificationCode(params: {
+    email: string;
+    code: string;
+    expiresAt: Date;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<EmailVerificationCodeRow> {
+    const { email, code, expiresAt, ipAddress, userAgent } = params;
+    const result = await pool.query<EmailVerificationCodeRow>(
+      `
+        INSERT INTO email_verification_codes (email, code, expires_at, ip_address, user_agent)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `,
+      [email, code, expiresAt, ipAddress || null, userAgent || null],
+    );
+    return result.rows[0];
+  },
+
+  async getValidVerificationCode(email: string, code: string): Promise<EmailVerificationCodeRow | null> {
+    const result = await pool.query<EmailVerificationCodeRow>(
+      `
+        SELECT * FROM email_verification_codes
+        WHERE email = $1 AND code = $2 AND expires_at > CURRENT_TIMESTAMP AND used = FALSE
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [email, code],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  async markVerificationCodeAsUsed(id: string): Promise<void> {
+    await pool.query(
+      "UPDATE email_verification_codes SET used = TRUE WHERE id = $1",
+      [id],
+    );
+  },
+
+  async getRecentVerificationAttempts(email: string, minutes: number = 10): Promise<number> {
+    const result = await pool.query(
+      `
+        SELECT COUNT(*) as count FROM email_verification_codes
+        WHERE email = $1 AND created_at > CURRENT_TIMESTAMP - INTERVAL '${minutes} minutes'
+      `,
+      [email],
+    );
+    return parseInt(result.rows[0].count, 10);
+  },
+
+  async cleanupExpiredVerificationCodes(): Promise<void> {
+    await pool.query("DELETE FROM email_verification_codes WHERE expires_at < CURRENT_TIMESTAMP");
   },
 };

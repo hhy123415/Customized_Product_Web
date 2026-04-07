@@ -1,17 +1,28 @@
-/* NavBar.module.css */
+/* NavBar.module.css - 统一设计系统 */
+
+/* 导入设计系统变量 */
+@import './variables.css';
 
 .navbar {
-  background-color: #333;
-  color: white;
-  padding: 1rem 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: var(--gradient-dark);
+  color: var(--color-white);
+  padding: var(--space-3) 0;
+  box-shadow: var(--shadow-lg);
   position: sticky;
   top: 0;
-  z-index: 1000;
+  z-index: var(--z-sticky);
   width: 100%;
   margin: 0;
   border: none;
   box-sizing: border-box;
+  backdrop-filter: blur(10px);
+  background-color: rgba(31, 41, 55, 0.95);
+}
+
+.nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
 }
 
 .nav-links {
@@ -20,8 +31,8 @@
   align-items: center;
   list-style: none;
   margin: 0;
-  padding: 0 2rem;
-  gap: 2rem;
+  padding: 0;
+  gap: var(--space-4);
 }
 
 .nav-links li {
@@ -32,106 +43,195 @@
 .welcome-message {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   margin-right: auto;
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: #f0f0f0;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--color-gray-200);
 }
 
 .user-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
   object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: #e8e8e8;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: var(--color-gray-300);
+  transition: all var(--transition-normal);
+}
+
+.user-avatar:hover {
+  border-color: var(--color-primary);
+  transform: scale(1.05);
 }
 
 .logout-button {
-  background-color: #dc3545;
-  color: white;
+  background: linear-gradient(135deg, var(--color-error) 0%, #dc2626 100%);
+  color: var(--color-white);
   border: none;
-  padding: 0.5rem 1.5rem;
-  border-radius: 4px;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
-.logout-button:hover {
-  background-color: #c82333;
+.logout-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3);
 }
 
 .logout-button:active {
   transform: translateY(0);
 }
 
+.logout-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .nav-links a {
-  color: white;
+  color: var(--color-gray-200);
   text-decoration: none;
-  font-size: 1rem;
-  font-weight: 500;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  transition: all 0.3s ease;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+  position: relative;
 }
 
 .nav-links a:hover {
   background-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-white);
   text-decoration: none;
 }
 
 .nav-links a.active {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.nav-links a.active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  background-color: var(--color-primary-light);
+  border-radius: var(--radius-full);
+}
+
+/* 品牌标志 */
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-right: auto;
+  color: var(--color-white);
+  font-weight: var(--font-bold);
+  font-size: var(--text-xl);
+  text-decoration: none;
+}
+
+.nav-brand:hover {
+  color: var(--color-white);
+  text-decoration: none;
+}
+
+.brand-icon {
+  font-size: var(--text-2xl);
+  color: var(--color-primary-light);
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
   .navbar {
-    padding: 1rem;
+    padding: var(--space-2) 0;
+  }
+
+  .nav-container {
+    padding: 0 var(--space-3);
   }
 
   .nav-links {
-    gap: 1rem;
+    gap: var(--space-3);
     flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .nav-brand {
+    font-size: var(--text-lg);
   }
 
   .welcome-message {
-    font-size: 1rem;
-    margin-right: 1rem;
+    font-size: var(--text-sm);
+    margin-right: var(--space-2);
+  }
+
+  .user-avatar {
+    width: 28px;
+    height: 28px;
   }
 
   .logout-button {
-    padding: 0.4rem 1rem;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  .nav-links a {
+    font-size: var(--text-sm);
+    padding: var(--space-1) var(--space-2);
   }
 }
 
 @media (max-width: 480px) {
   .navbar {
-    padding: 0.75rem;
+    padding: var(--space-2) 0;
   }
 
   .nav-links {
-    gap: 0.75rem;
+    gap: var(--space-2);
     justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-brand {
+    text-align: center;
+    justify-content: center;
+    margin: 0 auto var(--space-2);
+    width: 100%;
   }
 
   .welcome-message {
-    font-size: 0.9rem;
-    margin-right: 0;
     text-align: center;
+    margin: var(--space-2) auto;
     width: 100%;
-    order: -1;
+    justify-content: center;
   }
 
-  .logout-button,
   .nav-links a {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.9rem;
+    text-align: center;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+  }
+
+  .logout-button {
+    width: 100%;
+    justify-content: center;
+    padding: var(--space-2);
+  }
+
+  .user-avatar {
+    width: 24px;
+    height: 24px;
   }
 }

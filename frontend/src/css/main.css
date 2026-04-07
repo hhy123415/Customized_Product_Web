@@ -1,0 +1,126 @@
+/* 主样式文件 - 导入所有样式 */
+
+/* 1. 设计系统变量 */
+@import './variables.css';
+
+/* 2. 基础样式 */
+@import './index.css';
+
+/* 3. 组件样式 */
+@import './components.css';
+
+/* 4. 应用布局样式 */
+@import './App.css';
+
+/* 5. 页面样式（按需导入） */
+/* @import './Login.module.css'; */
+/* @import './Register.module.css'; */
+/* @import './Home.module.css'; */
+/* @import './CreativeSquare.module.css'; */
+/* @import './ProductCustomization.module.css'; */
+/* @import './Navbar.module.css'; */
+
+/* 注意：CSS模块文件需要在各自的组件中导入，这里只导入全局样式 */
+
+/* 全局工具类 */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-1 { gap: var(--space-1); }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+.gap-5 { gap: var(--space-5); }
+.gap-6 { gap: var(--space-6); }
+
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+
+.text-primary { color: var(--color-primary); }
+.text-secondary { color: var(--color-secondary); }
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-error { color: var(--color-error); }
+.text-gray-500 { color: var(--color-gray-500); }
+.text-gray-700 { color: var(--color-gray-700); }
+.text-gray-900 { color: var(--color-gray-900); }
+
+.bg-primary { background-color: var(--color-primary); }
+.bg-secondary { background-color: var(--color-secondary); }
+.bg-success { background-color: var(--color-success); }
+.bg-warning { background-color: var(--color-warning); }
+.bg-error { background-color: var(--color-error); }
+.bg-gray-50 { background-color: var(--color-gray-50); }
+.bg-gray-100 { background-color: var(--color-gray-100); }
+.bg-gray-200 { background-color: var(--color-gray-200); }
+
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+.rounded-full { border-radius: var(--radius-full); }
+
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+.shadow-xl { box-shadow: var(--shadow-xl); }
+
+/* 打印样式 */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  a {
+    color: black !important;
+    text-decoration: underline !important;
+  }
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+  :root {
+    --color-primary: #4f46e5;
+    --color-primary-dark: #4338ca;
+    --color-error: #b91c1c;
+    --color-success: #047857;
+    --color-warning: #b45309;
+  }
+
+  .btn, .card, .form-control {
+    border-width: 2px;
+  }
+}
+
+/* 减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -12,6 +12,7 @@ interface FormData {
   password: string;
   email: string;
   registerCode: string;
+  verificationCode: string;
 }
 
 interface Errors extends Partial<FormData> {
@@ -36,15 +37,73 @@ function Register() {
     password: "",
     email: "",
     registerCode: "",
+    verificationCode: "",
   });
   const [errors, setErrors] = useState<Errors>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isSendingCode, setIsSendingCode] = useState<boolean>(false);
+  const [countdown, setCountdown] = useState<number>(0);
+  const [codeSent, setCodeSent] = useState<boolean>(false);
   const navigate = useNavigate();
 
   const handleRoleChange = (newRole: Role) => {
     setRole(newRole);
     setErrors({});
     setFormData((prev) => ({ ...prev, registerCode: "" }));
+  };
+
+  // 发送验证码
+  const handleSendVerificationCode = async () => {
+    if (!formData.email) {
+      setErrors({ email: "请输入邮箱地址" });
+      return;
+    }
+
+    // 验证邮箱格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setErrors({ email: "邮箱格式不正确" });
+      return;
+    }
+
+    setIsSendingCode(true);
+    setErrors({});
+
+    try {
+      const response = await api.post("/send-verification-code", {
+        email: formData.email,
+      });
+
+      if (response.data.success) {
+        setCodeSent(true);
+        // 开始60秒倒计时
+        setCountdown(60);
+        const timer = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        alert("验证码已发送到您的邮箱，请查收");
+      } else {
+        setErrors({ submit: response.data.message || "发送验证码失败" });
+      }
+    } catch (error) {
+      console.error("发送验证码失败:", error);
+      if (axios.isAxiosError(error)) {
+        setErrors({
+          submit: error.response?.data?.message || "发送验证码失败",
+        });
+      } else {
+        setErrors({ submit: "无法连接至服务器" });
+      }
+    } finally {
+      setIsSendingCode(false);
+    }
   };
 
   const handleFormChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -74,6 +133,17 @@ function Register() {
 
     if (!formData.email) {
       newErrors.email = "请输入邮箱";
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        newErrors.email = "邮箱格式不正确";
+      }
+    }
+
+    if (!formData.verificationCode.trim()) {
+      newErrors.verificationCode = "请输入邮箱验证码";
+    } else if (formData.verificationCode.length !== 6) {
+      newErrors.verificationCode = "验证码必须是6位数字";
     }
 
     if ((role === "enterprise" || role === "admin") && !formData.registerCode.trim()) {
@@ -213,6 +283,45 @@ function Register() {
             />
             {errors.email && (
               <span className={style["error-message"]}>{errors.email}</span>
+            )}
+          </div>
+
+          <div className={style["form-group"]}>
+            <label htmlFor="verificationCode" className={style["form-label"]}>
+              邮箱验证码
+            </label>
+            <div className={style["verification-code-container"]}>
+              <input
+                type="text"
+                id="verificationCode"
+                name="verificationCode"
+                value={formData.verificationCode}
+                onChange={handleFormChange}
+                className={`${style["form-input"]} ${style["verification-code-input"]} ${
+                  errors.verificationCode ? style.error : ""
+                }`}
+                placeholder="请输入6位验证码"
+                maxLength={6}
+              />
+              <button
+                type="button"
+                className={`${style["send-code-btn"]} ${
+                  countdown > 0 ? style.disabled : ""
+                }`}
+                onClick={handleSendVerificationCode}
+                disabled={isSendingCode || countdown > 0 || !formData.email}
+              >
+                {isSendingCode
+                  ? "发送中..."
+                  : countdown > 0
+                  ? `${countdown}秒后重试`
+                  : codeSent
+                  ? "重新发送"
+                  : "发送验证码"}
+              </button>
+            </div>
+            {errors.verificationCode && (
+              <span className={style["error-message"]}>{errors.verificationCode}</span>
             )}
           </div>
 

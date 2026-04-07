@@ -1,7 +1,123 @@
+/* 导入设计系统变量 */
+@import './variables.css';
+
 body {
   margin: 0;
   padding: 0;
-  background-color: #f8f9fa;
+  background-color: var(--color-gray-50);
+  color: var(--color-gray-800);
+  font-family: var(--font-family);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   overflow-y: auto;
 }
+
+/* 全局滚动条样式 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-gray-100);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-400);
+}
+
+/* 全局链接样式 */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+/* 全局标题样式 */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--color-gray-900);
+  font-weight: var(--font-semibold);
+  line-height: 1.2;
+  margin-top: 0;
+}
+
+h1 {
+  font-size: var(--text-4xl);
+  margin-bottom: var(--space-6);
+}
+
+h2 {
+  font-size: var(--text-3xl);
+  margin-bottom: var(--space-5);
+}
+
+h3 {
+  font-size: var(--text-2xl);
+  margin-bottom: var(--space-4);
+}
+
+h4 {
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-3);
+}
+
+/* 全局段落样式 */
+p {
+  margin-bottom: var(--space-4);
+  color: var(--color-gray-700);
+}
+
+/* 全局容器 */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+/* 工具类 */
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.mt-1 { margin-top: var(--space-1); }
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-5 { margin-top: var(--space-5); }
+.mt-6 { margin-top: var(--space-6); }
+
+.mb-1 { margin-bottom: var(--space-1); }
+.mb-2 { margin-bottom: var(--space-2); }
+.mb-3 { margin-bottom: var(--space-3); }
+.mb-4 { margin-bottom: var(--space-4); }
+.mb-5 { margin-bottom: var(--space-5); }
+.mb-6 { margin-bottom: var(--space-6); }
+
+.p-1 { padding: var(--space-1); }
+.p-2 { padding: var(--space-2); }
+.p-3 { padding: var(--space-3); }
+.p-4 { padding: var(--space-4); }
+.p-5 { padding: var(--space-5); }
+.p-6 { padding: var(--space-6); }
