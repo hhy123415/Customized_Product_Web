@@ -16,6 +16,7 @@ export interface Post {
   author_img_path?: string | null;
 }
 
+type Role = "regular" | "enterprise" | "admin";
 export interface PostDetail {
   post_id: string;
   title: string;
@@ -25,6 +26,7 @@ export interface PostDetail {
   updated_at: string;
   author_user_id: string;
   author_username: string;
+  author_role: Role;
   author_img_path?: string | null;
 }
 
@@ -36,5 +38,6 @@ export interface Comment {
   updated_at: string;
   author_user_id: string;
   author_username: string;
+  author_role: Role;
   author_img_path?: string | null;
 }

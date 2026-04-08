@@ -153,6 +153,7 @@ export const db = {
           p.updated_at,
           u.user_id AS author_user_id,
           u.username AS author_username,
+          u.role AS author_role,
           u.img_path AS author_img_path
         FROM posts p
         JOIN users u ON p.user_id = u.user_id
@@ -175,6 +176,7 @@ export const db = {
           c.updated_at,
           u.user_id AS author_user_id,
           u.username AS author_username,
+          u.role AS author_role,
           u.img_path AS author_img_path
         FROM comments c
         JOIN users u ON c.user_id = u.user_id

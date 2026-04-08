@@ -14,7 +14,20 @@ const formatDate = (value: string) => {
   return date.toLocaleString("zh-CN", { hour12: false });
 };
 
+// 角色标签映射函数
+const getRoleTag = (role?: string) => {
+  switch (role) {
+    case "admin":
+      return { text: "管理员", className: styles.tagAdmin };
+    case "enterprise":
+      return { text: "企业", className: styles.tagEnterprise };
+    default:
+      return { text: "用户", className: styles.tagUser };
+  }
+};
+
 function PostDetailPage() {
+  /*auth.role=="admin"为管理员,auth.role=="enterprise"为企业用户，其他为普通用户*/
   const { auth } = useAuth();
   const { postId } = useParams();
   const [post, setPost] = useState<PostDetail | null>(null);
@@ -120,8 +133,17 @@ function PostDetailPage() {
                     className={styles.avatar}
                   />
                   <div>
-                    <p className={styles.authorName}>{post.author_username}</p>
-                    <p className={styles.meta}>发布时间: {formatDate(post.created_at)}</p>
+                    <p className={styles.authorName}>
+                      {post.author_username}
+                      <span
+                        className={`${styles.roleTag} ${getRoleTag(post.author_role).className}`}
+                      >
+                        {getRoleTag(post.author_role).text}
+                      </span>
+                    </p>
+                    <p className={styles.meta}>
+                      发布时间: {formatDate(post.created_at)}
+                    </p>
                   </div>
                 </div>
 
@@ -131,26 +153,15 @@ function PostDetailPage() {
               <section className={styles.replySection}>
                 <h2>回复 ({comments.length})</h2>
 
-                <form className={styles.replyForm} onSubmit={handleCreateComment}>
-                  <textarea
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    rows={5}
-                    placeholder="写下你的回复..."
-                    className={styles.textarea}
-                  />
-                  {submitError && <p className={styles.errorMessage}>{submitError}</p>}
-                  <button type="submit" className={styles.primaryBtn} disabled={isSubmitting}>
-                    {isSubmitting ? "提交中..." : "提交回复"}
-                  </button>
-                </form>
-
                 <div className={styles.floorList}>
                   {comments.length === 0 ? (
                     <p className={styles.emptyText}>还没有回复，来抢沙发吧。</p>
                   ) : (
                     comments.map((comment, index) => (
-                      <article key={comment.comment_id} className={styles.floorCard}>
+                      <article
+                        key={comment.comment_id}
+                        className={styles.floorCard}
+                      >
                         <div className={styles.floorHeader}>
                           <div className={styles.authorRow}>
                             <img
@@ -159,17 +170,51 @@ function PostDetailPage() {
                               className={styles.avatar}
                             />
                             <div>
-                              <p className={styles.authorName}>{comment.author_username}</p>
-                              <p className={styles.meta}>{formatDate(comment.created_at)}</p>
+                              <p className={styles.authorName}>
+                                {comment.author_username}
+                                <span
+                                  className={`${styles.roleTag} ${getRoleTag(comment.author_role).className}`}
+                                >
+                                  {getRoleTag(comment.author_role).text}
+                                </span>
+                              </p>
+                              <p className={styles.meta}>
+                                {formatDate(comment.created_at)}
+                              </p>
                             </div>
                           </div>
-                          <span className={styles.floorTag}>{index + 1} 楼</span>
+                          <span className={styles.floorTag}>
+                            {index + 1} 楼
+                          </span>
                         </div>
                         <p className={styles.floorContent}>{comment.content}</p>
                       </article>
                     ))
                   )}
                 </div>
+
+                <form
+                  className={styles.replyForm}
+                  onSubmit={handleCreateComment}
+                >
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    rows={5}
+                    placeholder="写下你的回复..."
+                    className={styles.textarea}
+                  />
+                  {submitError && (
+                    <p className={styles.errorMessage}>{submitError}</p>
+                  )}
+                  <button
+                    type="submit"
+                    className={styles.primaryBtn}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "提交中..." : "提交回复"}
+                  </button>
+                </form>
               </section>
             </>
           )}

@@ -29,7 +29,9 @@ function NavBar() {
           <li>
             <Link
               to="/CreativeSquare"
-              className={location.pathname === "/CreativeSquare" ? styles.active : ""}
+              className={
+                location.pathname === "/CreativeSquare" ? styles.active : ""
+              }
             >
               创意广场
             </Link>
@@ -38,7 +40,9 @@ function NavBar() {
             <Link
               to="/product-customization"
               className={
-                location.pathname === "/product-customization" ? styles.active : ""
+                location.pathname === "/product-customization"
+                  ? styles.active
+                  : ""
               }
             >
               产品定制
@@ -47,7 +51,12 @@ function NavBar() {
           {auth.isLoggedIn ? (
             <>
               <li className={styles["welcome-message"]}>
-                欢迎回来，{auth.role === "admin" ? "管理员" : "用户"}{" "}
+                欢迎回来，
+                {auth.role === "admin"
+                  ? "管理员"
+                  : auth.role == "enterprise"
+                    ? "企业用户"
+                    : "普通用户"}{" "}
                 <img
                   src={avatarSrc}
                   alt="用户头像"
@@ -99,4 +108,3 @@ function NavBar() {
 }
 
 export default NavBar;
-

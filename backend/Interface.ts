@@ -43,6 +43,7 @@ export interface PostDetailRow {
   updated_at: string;
   author_user_id: string;
   author_username: string;
+  author_role: Role;
   author_img_path?: string | null;
 }
 
@@ -54,6 +55,7 @@ export interface CommentRow {
   updated_at: string;
   author_user_id: string;
   author_username: string;
+  author_role: Role;
   author_img_path?: string | null;
 }
 
