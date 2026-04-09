@@ -5,6 +5,7 @@ export interface User_info {
   img_path?: string | null;
 }
 
+type Role = "regular" | "enterprise" | "admin";
 export interface Post {
   post_id: string;
   title: string;
@@ -13,10 +14,9 @@ export interface Post {
   created_at: string;
   updated_at: string;
   author_username: string;
+  author_role: Role;
   author_img_path?: string | null;
 }
-
-type Role = "regular" | "enterprise" | "admin";
 export interface PostDetail {
   post_id: string;
   title: string;

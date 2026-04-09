@@ -215,6 +215,36 @@
   border: 2px solid var(--color-gray-200);
 }
 
+.roleTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.tagAdmin {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+}
+
+.tagEnterprise {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.tagUser {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
 .postMeta {
   margin: 0;
   color: var(--color-gray-600);

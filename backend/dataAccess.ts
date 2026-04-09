@@ -96,6 +96,7 @@ export const db = {
         p.created_at,
         p.updated_at,
         u.username AS author_username,
+        u.role AS author_role,
         u.img_path AS author_img_path
       FROM posts p
       JOIN users u ON p.user_id = u.user_id

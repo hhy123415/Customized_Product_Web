@@ -14,6 +14,18 @@ const formatDate = (value: string) => {
   return date.toLocaleString("zh-CN", { hour12: false });
 };
 
+// 角色标签映射函数
+const getRoleTag = (role?: string) => {
+  switch (role) {
+    case "admin":
+      return { text: "管理员", className: styles.tagAdmin };
+    case "enterprise":
+      return { text: "企业", className: styles.tagEnterprise };
+    default:
+      return { text: "用户", className: styles.tagUser };
+  }
+};
+
 function Square() {
   const { auth } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -141,6 +153,11 @@ function Square() {
                         className={styles.avatar}
                       />
                       <span>{post.author_username}</span>
+                      <span
+                        className={`${styles.roleTag} ${getRoleTag(post.author_role).className}`}
+                      >
+                        {getRoleTag(post.author_role).text}
+                      </span>
                     </div>
 
                     <p className={styles.postMeta}>

@@ -31,6 +31,7 @@ export interface PostRow {
   created_at: string;
   updated_at: string;
   author_username: string;
+  author_role: Role;
   author_img_path?: string | null;
 }
 
