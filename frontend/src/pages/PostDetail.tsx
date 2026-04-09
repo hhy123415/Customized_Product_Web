@@ -127,20 +127,28 @@ function PostDetailPage() {
                 <h1 className={styles.postTitle}>{post.title}</h1>
 
                 <div className={styles.authorRow}>
-                  <img
-                    src={post.author_img_path || DEFAULT_AVATAR}
-                    alt={`${post.author_username} 的头像`}
-                    className={styles.avatar}
-                  />
+                  <Link
+                    to={`/users/${post.author_user_id}`}
+                    className={styles.userLink}
+                  >
+                    <img
+                      src={post.author_img_path || DEFAULT_AVATAR}
+                      alt={`${post.author_username} 的头像`}
+                      className={styles.avatar}
+                    />
+                  </Link>
                   <div>
-                    <p className={styles.authorName}>
+                    <Link
+                      to={`/users/${post.author_user_id}`}
+                      className={`${styles.authorName} ${styles.userLink}`}
+                    >
                       {post.author_username}
                       <span
                         className={`${styles.roleTag} ${getRoleTag(post.author_role).className}`}
                       >
                         {getRoleTag(post.author_role).text}
                       </span>
-                    </p>
+                    </Link>
                     <p className={styles.meta}>
                       发布时间: {formatDate(post.created_at)}
                     </p>
@@ -164,20 +172,28 @@ function PostDetailPage() {
                       >
                         <div className={styles.floorHeader}>
                           <div className={styles.authorRow}>
-                            <img
-                              src={comment.author_img_path || DEFAULT_AVATAR}
-                              alt={`${comment.author_username} 的头像`}
-                              className={styles.avatar}
-                            />
+                            <Link
+                              to={`/users/${comment.author_user_id}`}
+                              className={styles.userLink}
+                            >
+                              <img
+                                src={comment.author_img_path || DEFAULT_AVATAR}
+                                alt={`${comment.author_username} 的头像`}
+                                className={styles.avatar}
+                              />
+                            </Link>
                             <div>
-                              <p className={styles.authorName}>
+                              <Link
+                                to={`/users/${comment.author_user_id}`}
+                                className={`${styles.authorName} ${styles.userLink}`}
+                              >
                                 {comment.author_username}
                                 <span
                                   className={`${styles.roleTag} ${getRoleTag(comment.author_role).className}`}
                                 >
                                   {getRoleTag(comment.author_role).text}
                                 </span>
-                              </p>
+                              </Link>
                               <p className={styles.meta}>
                                 {formatDate(comment.created_at)}
                               </p>

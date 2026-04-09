@@ -44,6 +44,56 @@ exports.db = {
         const result = await pool.query("UPDATE users SET img_path = $1 WHERE user_id = $2 RETURNING *", [imgPath, userId]);
         return result.rows[0] ?? null;
     },
+    async updateUserBioById(userId, bio) {
+        const result = await pool.query("UPDATE users SET bio = $1 WHERE user_id = $2 RETURNING *", [bio, userId]);
+        return result.rows[0] ?? null;
+    },
+    async getUserPublicProfileById(userId) {
+        const result = await pool.query(`
+        SELECT
+          user_id,
+          username,
+          role,
+          img_path,
+          bio,
+          created_at
+        FROM users
+        WHERE user_id = $1
+      `, [userId]);
+        return result.rows[0] ?? null;
+    },
+    async getUserWorksByUserId(userId) {
+        const result = await pool.query(`
+        SELECT
+          work_id,
+          user_id,
+          image_path,
+          description,
+          created_at,
+          updated_at
+        FROM user_works
+        WHERE user_id = $1
+        ORDER BY created_at DESC, work_id DESC
+      `, [userId]);
+        return result.rows;
+    },
+    async createUserWork(params) {
+        const { userId, imagePath, description } = params;
+        const result = await pool.query(`
+        INSERT INTO user_works (user_id, image_path, description)
+        VALUES ($1, $2, $3)
+        RETURNING work_id, user_id, image_path, description, created_at, updated_at
+      `, [userId, imagePath, description]);
+        return result.rows[0];
+    },
+    async deleteUserWorkByIdAndUserId(workId, userId) {
+        const result = await pool.query(`
+        DELETE FROM user_works
+        WHERE work_id = $1 AND user_id = $2
+        RETURNING work_id, user_id, image_path, description, created_at, updated_at
+      `, [workId, userId]);
+        return result.rows[0] ?? null;
+    },
     async getPostsWithAuthor() {
         const result = await pool.query(`
       SELECT
@@ -54,6 +104,7 @@ exports.db = {
         p.created_at,
         p.updated_at,
         u.username AS author_username,
+        u.role AS author_role,
         u.img_path AS author_img_path
       FROM posts p
       JOIN users u ON p.user_id = u.user_id
@@ -96,6 +147,7 @@ exports.db = {
           p.updated_at,
           u.user_id AS author_user_id,
           u.username AS author_username,
+          u.role AS author_role,
           u.img_path AS author_img_path
         FROM posts p
         JOIN users u ON p.user_id = u.user_id
@@ -113,6 +165,7 @@ exports.db = {
           c.updated_at,
           u.user_id AS author_user_id,
           u.username AS author_username,
+          u.role AS author_role,
           u.img_path AS author_img_path
         FROM comments c
         JOIN users u ON c.user_id = u.user_id
@@ -144,5 +197,37 @@ exports.db = {
         WHERE c.comment_id = $1
       `, [inserted.comment_id]);
         return commentWithAuthor.rows[0];
+    },
+    // 邮箱验证码相关操作
+    async createVerificationCode(params) {
+        const { email, code, expiresAt, ipAddress, userAgent } = params;
+        const result = await pool.query(`
+        INSERT INTO email_verification_codes (email, code, expires_at, ip_address, user_agent)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `, [email, code, expiresAt, ipAddress || null, userAgent || null]);
+        return result.rows[0];
+    },
+    async getValidVerificationCode(email, code) {
+        const result = await pool.query(`
+        SELECT * FROM email_verification_codes
+        WHERE email = $1 AND code = $2 AND expires_at > CURRENT_TIMESTAMP AND used = FALSE
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [email, code]);
+        return result.rows[0] ?? null;
+    },
+    async markVerificationCodeAsUsed(id) {
+        await pool.query("UPDATE email_verification_codes SET used = TRUE WHERE id = $1", [id]);
+    },
+    async getRecentVerificationAttempts(email, minutes = 10) {
+        const result = await pool.query(`
+        SELECT COUNT(*) as count FROM email_verification_codes
+        WHERE email = $1 AND created_at > CURRENT_TIMESTAMP - INTERVAL '${minutes} minutes'
+      `, [email]);
+        return parseInt(result.rows[0].count, 10);
+    },
+    async cleanupExpiredVerificationCodes() {
+        await pool.query("DELETE FROM email_verification_codes WHERE expires_at < CURRENT_TIMESTAMP");
     },
 };

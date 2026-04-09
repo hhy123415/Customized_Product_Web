@@ -1,5 +1,13 @@
 import { Pool } from "pg";
-import type { CommentRow, PostDetailRow, PostRow, UserRow, EmailVerificationCodeRow } from "./Interface";
+import type {
+  CommentRow,
+  PostDetailRow,
+  PostRow,
+  UserPublicProfileRow,
+  UserRow,
+  UserWorkRow,
+  EmailVerificationCodeRow,
+} from "./Interface";
 
 const pool = new Pool({
   user: process.env.DB_USER,
@@ -82,6 +90,86 @@ export const db = {
     const result = await pool.query<UserRow>(
       "UPDATE users SET img_path = $1 WHERE user_id = $2 RETURNING *",
       [imgPath, userId],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  async updateUserBioById(
+    userId: string,
+    bio: string | null,
+  ): Promise<UserRow | null> {
+    const result = await pool.query<UserRow>(
+      "UPDATE users SET bio = $1 WHERE user_id = $2 RETURNING *",
+      [bio, userId],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  async getUserPublicProfileById(userId: string): Promise<UserPublicProfileRow | null> {
+    const result = await pool.query<UserPublicProfileRow>(
+      `
+        SELECT
+          user_id,
+          username,
+          role,
+          img_path,
+          bio,
+          created_at
+        FROM users
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  async getUserWorksByUserId(userId: string): Promise<UserWorkRow[]> {
+    const result = await pool.query<UserWorkRow>(
+      `
+        SELECT
+          work_id,
+          user_id,
+          image_path,
+          description,
+          created_at,
+          updated_at
+        FROM user_works
+        WHERE user_id = $1
+        ORDER BY created_at DESC, work_id DESC
+      `,
+      [userId],
+    );
+    return result.rows;
+  },
+
+  async createUserWork(params: {
+    userId: string;
+    imagePath: string;
+    description: string | null;
+  }): Promise<UserWorkRow> {
+    const { userId, imagePath, description } = params;
+    const result = await pool.query<UserWorkRow>(
+      `
+        INSERT INTO user_works (user_id, image_path, description)
+        VALUES ($1, $2, $3)
+        RETURNING work_id, user_id, image_path, description, created_at, updated_at
+      `,
+      [userId, imagePath, description],
+    );
+    return result.rows[0];
+  },
+
+  async deleteUserWorkByIdAndUserId(
+    workId: string,
+    userId: string,
+  ): Promise<UserWorkRow | null> {
+    const result = await pool.query<UserWorkRow>(
+      `
+        DELETE FROM user_works
+        WHERE work_id = $1 AND user_id = $2
+        RETURNING work_id, user_id, image_path, description, created_at, updated_at
+      `,
+      [workId, userId],
     );
     return result.rows[0] ?? null;
   },

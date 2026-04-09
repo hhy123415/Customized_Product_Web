@@ -13,13 +13,71 @@ const axios_1 = __importDefault(require("axios"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const multer_1 = __importDefault(require("multer"));
+const nodemailer_1 = __importDefault(require("nodemailer"));
 const auth_1 = require("./auth");
 const dataAccess_1 = require("./dataAccess");
 dotenv_1.default.config();
 const DIFY_API_KEY = process.env.DIFY_API_KEY;
 const DIFY_API_URL = process.env.DIFY_API_URL;
+const DIFY_CHAT_TIMEOUT_MS = Number(process.env.DIFY_CHAT_TIMEOUT_MS || 45000);
 const ENTERPRISE_REGISTER_CODE = process.env.ENTERPRISE_REGISTER_CODE || "6666";
 const ADMIN_REGISTER_CODE = process.env.ADMIN_REGISTER_CODE || "8888";
+// 邮件发送配置
+const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
+const EMAIL_FROM = process.env.EMAIL_FROM || SMTP_USER;
+// 验证码配置
+const VERIFICATION_CODE_EXPIRY_MINUTES = parseInt(process.env.VERIFICATION_CODE_EXPIRY_MINUTES || "10", 10);
+const MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES = parseInt(process.env.MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES || "3", 10);
+// 创建邮件传输器
+const createTransporter = () => {
+    return nodemailer_1.default.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        auth: {
+            user: SMTP_USER,
+            pass: SMTP_PASS,
+        },
+    });
+};
+// 生成6位数字验证码
+const generateVerificationCode = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+// 发送验证码邮件
+const sendVerificationEmail = async (email, code) => {
+    try {
+        const transporter = createTransporter();
+        const mailOptions = {
+            from: EMAIL_FROM,
+            to: email,
+            subject: "邮箱验证码 - 您的网站",
+            html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+          <h2 style="color: #333; text-align: center;">邮箱验证码</h2>
+          <p style="color: #666; font-size: 16px;">您好！</p>
+          <p style="color: #666; font-size: 16px;">您正在注册我们的网站，验证码为：</p>
+          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 24px; font-weight: bold; color: #333; letter-spacing: 5px;">${code}</span>
+          </div>
+          <p style="color: #666; font-size: 16px;">验证码有效期为 ${VERIFICATION_CODE_EXPIRY_MINUTES} 分钟，请尽快使用。</p>
+          <p style="color: #666; font-size: 16px;">如果您没有进行此操作，请忽略此邮件。</p>
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+          <p style="color: #999; font-size: 14px; text-align: center;">此邮件由系统自动发送，请勿回复。</p>
+        </div>
+      `,
+        };
+        await transporter.sendMail(mailOptions);
+        return true;
+    }
+    catch (error) {
+        console.error("发送验证码邮件失败:", error);
+        return false;
+    }
+};
 dataAccess_1.db
     .checkConnection()
     .then(() => {
@@ -60,6 +118,8 @@ const uploadImage = (0, multer_1.default)({
 });
 app.use("/uploads", express_1.default.static(UPLOAD_DIR));
 const SECRET_KEY = process.env.JWT_SECRET || "";
+const MAX_BIO_LENGTH = 500;
+const MAX_WORK_DESCRIPTION_LENGTH = 200;
 app.get("/api/me", auth_1.authenticateToken, async (req, res) => {
     const userId = req.user?.user_id;
     if (!userId) {
@@ -107,10 +167,12 @@ app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
         res.json({
             success: true,
             user: {
+                user_id: user.user_id,
                 username: req.user?.username,
                 role: req.user?.role,
                 email: user.email,
                 img_path: user.img_path || null,
+                bio: user.bio || "",
             },
         });
     }
@@ -119,6 +181,48 @@ app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             message: "服务器内部错误",
+        });
+    }
+});
+app.get("/api/users/:userId/profile", auth_1.authenticateToken, async (req, res) => {
+    const rawUserId = req.params.userId;
+    const targetUserId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+    const currentUserId = req.user?.user_id;
+    if (!targetUserId) {
+        return res.status(400).json({
+            success: false,
+            message: "userId is required",
+        });
+    }
+    try {
+        const user = await dataAccess_1.db.getUserPublicProfileById(targetUserId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+        const works = await dataAccess_1.db.getUserWorksByUserId(targetUserId);
+        const isOwner = Boolean(currentUserId && currentUserId === targetUserId);
+        return res.json({
+            success: true,
+            is_owner: isOwner,
+            user: {
+                user_id: user.user_id,
+                username: user.username,
+                role: user.role,
+                img_path: user.img_path || null,
+                bio: user.bio || "",
+                created_at: user.created_at,
+            },
+            works,
+        });
+    }
+    catch (err) {
+        console.error("get user profile error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
         });
     }
 });
@@ -170,14 +274,276 @@ app.put("/api/my_info/avatar", auth_1.authenticateToken, async (req, res) => {
         });
     }
 });
+app.put("/api/my_info/profile", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    const rawBio = req.body.bio;
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    if (rawBio !== null && rawBio !== undefined && typeof rawBio !== "string") {
+        return res.status(400).json({
+            success: false,
+            message: "bio must be string or null",
+        });
+    }
+    const bio = (rawBio || "").trim();
+    if (bio.length > MAX_BIO_LENGTH) {
+        return res.status(400).json({
+            success: false,
+            message: `bio is too long (max ${MAX_BIO_LENGTH})`,
+        });
+    }
+    try {
+        const updatedUser = await dataAccess_1.db.updateUserBioById(userId, bio || null);
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+        return res.json({
+            success: true,
+            message: "Profile updated successfully",
+            user: {
+                user_id: updatedUser.user_id,
+                username: updatedUser.username,
+                role: updatedUser.role,
+                email: updatedUser.email,
+                img_path: updatedUser.img_path || null,
+                bio: updatedUser.bio || "",
+            },
+        });
+    }
+    catch (err) {
+        console.error("update profile error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+});
+app.post("/api/my_info/works", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    const { image_path, description } = req.body;
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    const imagePath = (image_path || "").trim();
+    if (!imagePath) {
+        return res.status(400).json({
+            success: false,
+            message: "image_path is required",
+        });
+    }
+    if (!imagePath.startsWith("/uploads/")) {
+        return res.status(400).json({
+            success: false,
+            message: "image_path must be under /uploads/",
+        });
+    }
+    if (description !== null && description !== undefined && typeof description !== "string") {
+        return res.status(400).json({
+            success: false,
+            message: "description must be string or null",
+        });
+    }
+    const normalizedDescription = (description || "").trim();
+    if (normalizedDescription.length > MAX_WORK_DESCRIPTION_LENGTH) {
+        return res.status(400).json({
+            success: false,
+            message: `description is too long (max ${MAX_WORK_DESCRIPTION_LENGTH})`,
+        });
+    }
+    try {
+        const work = await dataAccess_1.db.createUserWork({
+            userId,
+            imagePath,
+            description: normalizedDescription || null,
+        });
+        return res.status(201).json({
+            success: true,
+            message: "Work created",
+            work,
+        });
+    }
+    catch (err) {
+        console.error("create user work error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+});
+app.delete("/api/my_info/works/:workId", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    const rawWorkId = req.params.workId;
+    const workId = Array.isArray(rawWorkId) ? rawWorkId[0] : rawWorkId;
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    if (!workId) {
+        return res.status(400).json({
+            success: false,
+            message: "workId is required",
+        });
+    }
+    try {
+        const deleted = await dataAccess_1.db.deleteUserWorkByIdAndUserId(workId, userId);
+        if (!deleted) {
+            return res.status(404).json({
+                success: false,
+                message: "Work not found",
+            });
+        }
+        return res.json({
+            success: true,
+            message: "Work deleted",
+            work: deleted,
+        });
+    }
+    catch (err) {
+        console.error("delete user work error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+});
+// 发送邮箱验证码
+app.post("/api/send-verification-code", async (req, res) => {
+    const { email } = req.body;
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    try {
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "邮箱地址不能为空",
+            });
+        }
+        // 验证邮箱格式
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                message: "邮箱格式不正确",
+            });
+        }
+        // 检查邮箱是否已被注册
+        const emailExists = await dataAccess_1.db.getUserByEmail(email);
+        if (emailExists) {
+            return res.status(409).json({
+                success: false,
+                message: "该邮箱已被注册",
+            });
+        }
+        // 检查最近10分钟内的验证码发送次数
+        const recentAttempts = await dataAccess_1.db.getRecentVerificationAttempts(email);
+        if (recentAttempts >= MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES) {
+            return res.status(429).json({
+                success: false,
+                message: "验证码发送过于频繁，请稍后再试",
+            });
+        }
+        // 生成验证码
+        const code = generateVerificationCode();
+        const expiresAt = new Date(Date.now() + VERIFICATION_CODE_EXPIRY_MINUTES * 60 * 1000);
+        // 保存验证码到数据库
+        await dataAccess_1.db.createVerificationCode({
+            email,
+            code,
+            expiresAt,
+            ipAddress: typeof ipAddress === 'string' ? ipAddress : undefined,
+            userAgent,
+        });
+        // 发送验证码邮件
+        const emailSent = await sendVerificationEmail(email, code);
+        if (!emailSent) {
+            return res.status(500).json({
+                success: false,
+                message: "验证码发送失败，请稍后重试",
+            });
+        }
+        // 清理过期验证码
+        await dataAccess_1.db.cleanupExpiredVerificationCodes();
+        res.json({
+            success: true,
+            message: "验证码已发送到您的邮箱",
+            expiresIn: VERIFICATION_CODE_EXPIRY_MINUTES * 60, // 返回秒数
+        });
+    }
+    catch (err) {
+        console.error("发送验证码错误:", err);
+        res.status(500).json({
+            success: false,
+            message: "服务器内部错误",
+        });
+    }
+});
+// 验证邮箱验证码
+app.post("/api/verify-email-code", async (req, res) => {
+    const { email, code } = req.body;
+    try {
+        if (!email || !code) {
+            return res.status(400).json({
+                success: false,
+                message: "邮箱和验证码不能为空",
+            });
+        }
+        // 获取有效的验证码
+        const verificationCode = await dataAccess_1.db.getValidVerificationCode(email, code);
+        if (!verificationCode) {
+            return res.status(400).json({
+                success: false,
+                message: "验证码无效或已过期",
+            });
+        }
+        // 标记验证码为已使用
+        await dataAccess_1.db.markVerificationCodeAsUsed(verificationCode.id);
+        res.json({
+            success: true,
+            message: "邮箱验证成功",
+        });
+    }
+    catch (err) {
+        console.error("验证验证码错误:", err);
+        res.status(500).json({
+            success: false,
+            message: "服务器内部错误",
+        });
+    }
+});
 app.post("/api/register", async (req, res) => {
-    const { username, password, email, registerCode, role } = req.body;
+    const { username, password, email, registerCode, role, verificationCode } = req.body;
     const allowedRoles = ["regular", "enterprise", "admin"];
     try {
         if (!allowedRoles.includes(role)) {
             return res.status(400).json({
                 success: false,
                 message: "用户类型无效",
+            });
+        }
+        // 验证邮箱验证码
+        if (!verificationCode) {
+            return res.status(400).json({
+                success: false,
+                message: "验证码不能为空",
+            });
+        }
+        const validVerificationCode = await dataAccess_1.db.getValidVerificationCode(email, verificationCode);
+        if (!validVerificationCode) {
+            return res.status(400).json({
+                success: false,
+                message: "验证码无效或已过期",
             });
         }
         const userExists = await dataAccess_1.db.getUserByUsername(username);
@@ -208,6 +574,8 @@ app.post("/api/register", async (req, res) => {
                 message: "管理员注册码错误",
             });
         }
+        // 标记验证码为已使用
+        await dataAccess_1.db.markVerificationCodeAsUsed(validVerificationCode.id);
         await dataAccess_1.db.createUser({
             username,
             passwordHash: hashedPassword,
@@ -529,8 +897,10 @@ app.post("/api/chat", auth_1.authenticateToken, async (req, res) => {
             headers: {
                 Authorization: `Bearer ${DIFY_API_KEY}`,
                 "Content-Type": "application/json",
+                Accept: "text/event-stream",
             },
             responseType: "stream",
+            timeout: DIFY_CHAT_TIMEOUT_MS,
             validateStatus: () => true,
         });
         if (response.status < 200 || response.status >= 300) {
@@ -547,12 +917,38 @@ app.post("/api/chat", auth_1.authenticateToken, async (req, res) => {
             return;
         }
         response.data.pipe(res);
+        response.data.on("error", (streamError) => {
+            console.error("Dify stream error:", streamError);
+            if (!res.headersSent) {
+                res.status(502).json({
+                    error: "Dify stream error",
+                    details: streamError instanceof Error ? streamError.message : "Unknown stream error",
+                });
+            }
+            else {
+                res.end();
+            }
+        });
         response.data.on("end", () => {
             res.end();
         });
     }
     catch (error) {
         console.error("Dify logic error:", error);
+        if (axios_1.default.isAxiosError(error)) {
+            if (error.code === "ECONNABORTED") {
+                res.status(504).json({
+                    error: "Dify upstream timeout",
+                    details: `No response from Dify within ${DIFY_CHAT_TIMEOUT_MS}ms.`,
+                });
+                return;
+            }
+            res.status(502).json({
+                error: "Dify request failed",
+                details: error.message,
+            });
+            return;
+        }
         res.status(500).json({
             error: "Dify logic error",
             details: error instanceof Error ? error.message : "Unknown backend error",

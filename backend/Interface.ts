@@ -21,6 +21,25 @@ export interface UserRow {
   email: string;
   role: Role;
   img_path?: string | null;
+  bio?: string | null;
+}
+
+export interface UserPublicProfileRow {
+  user_id: string;
+  username: string;
+  role: Role;
+  img_path?: string | null;
+  bio?: string | null;
+  created_at: string;
+}
+
+export interface UserWorkRow {
+  work_id: string;
+  user_id: string;
+  image_path: string;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PostRow {

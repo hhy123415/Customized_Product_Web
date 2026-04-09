@@ -55,6 +55,15 @@
   font-weight: 600;
 }
 
+.userLink {
+  text-decoration: none;
+  color: inherit;
+}
+
+.userLink:hover {
+  opacity: 0.9;
+}
+
 .roleTag {
   display: inline-flex;
   align-items: center;

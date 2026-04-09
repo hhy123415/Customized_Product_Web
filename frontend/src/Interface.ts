@@ -1,8 +1,19 @@
 export interface User_info {
+  user_id?: string;
   username: string;
   email: string;
   role: string;
   img_path?: string | null;
+  bio?: string;
+}
+
+export interface UserWork {
+  work_id: string;
+  user_id: string;
+  image_path: string;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 type Role = "regular" | "enterprise" | "admin";

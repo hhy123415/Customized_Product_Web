@@ -48,6 +48,16 @@ function NavBar() {
               产品定制
             </Link>
           </li>
+          <li>
+            <Link
+              to="/about"
+              className={
+                location.pathname === "/about" ? styles.active : ""
+              }
+            >
+              关于
+            </Link>
+          </li>
           {auth.isLoggedIn ? (
             <>
               <li className={styles["welcome-message"]}>

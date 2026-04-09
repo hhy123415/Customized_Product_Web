@@ -14,6 +14,7 @@ import ProductCustomization from "./pages/ProductCustomization";
 import PoolCueCustomization from "./pages/PoolCueCustomization";
 import Live2DViewer from "./component/Live2DViewer";
 import { useAuth } from "./hooks/useAuth";
+import About from "./pages/About";
 
 // 创建一个内部组件，以便能够使用 useAuth Hook
 const AppContent = () => {
@@ -72,6 +73,15 @@ const AppContent = () => {
             </UserRoute>
           }
         />
+        <Route
+          path="/users/:userId"
+          element={
+            <UserRoute>
+              <MyAccount />
+            </UserRoute>
+          }
+        />
+        <Route path="/about" element={<About />} />
       </Routes>
 
       {/* 只有当 user 存在时才渲染 Live2DViewer */}

@@ -131,6 +131,8 @@ const uploadImage = multer({
 app.use("/uploads", express.static(UPLOAD_DIR));
 
 const SECRET_KEY = process.env.JWT_SECRET || "";
+const MAX_BIO_LENGTH = 500;
+const MAX_WORK_DESCRIPTION_LENGTH = 200;
 
 app.get("/api/me", authenticateToken, async (req: Request, res: Response) => {
   const userId = req.user?.user_id;
@@ -186,10 +188,12 @@ app.get("/api/my_info", authenticateToken, async (req: Request, res: Response) =
     res.json({
       success: true,
       user: {
+        user_id: user.user_id,
         username: req.user?.username,
         role: req.user?.role,
         email: user.email,
         img_path: user.img_path || null,
+        bio: user.bio || "",
       },
     });
   } catch (err) {
@@ -197,6 +201,52 @@ app.get("/api/my_info", authenticateToken, async (req: Request, res: Response) =
     res.status(500).json({
       success: false,
       message: "服务器内部错误",
+    });
+  }
+});
+
+app.get("/api/users/:userId/profile", authenticateToken, async (req: Request, res: Response) => {
+  const rawUserId = req.params.userId;
+  const targetUserId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+  const currentUserId = req.user?.user_id;
+
+  if (!targetUserId) {
+    return res.status(400).json({
+      success: false,
+      message: "userId is required",
+    });
+  }
+
+  try {
+    const user = await db.getUserPublicProfileById(targetUserId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const works = await db.getUserWorksByUserId(targetUserId);
+    const isOwner = Boolean(currentUserId && currentUserId === targetUserId);
+
+    return res.json({
+      success: true,
+      is_owner: isOwner,
+      user: {
+        user_id: user.user_id,
+        username: user.username,
+        role: user.role,
+        img_path: user.img_path || null,
+        bio: user.bio || "",
+        created_at: user.created_at,
+      },
+      works,
+    });
+  } catch (err) {
+    console.error("get user profile error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 });
@@ -248,6 +298,167 @@ app.put("/api/my_info/avatar", authenticateToken, async (req: Request, res: Resp
     });
   } catch (err) {
     console.error("update avatar error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+app.put("/api/my_info/profile", authenticateToken, async (req: Request, res: Response) => {
+  const userId = req.user?.user_id;
+  const rawBio = (req.body as { bio?: string | null }).bio;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    });
+  }
+
+  if (rawBio !== null && rawBio !== undefined && typeof rawBio !== "string") {
+    return res.status(400).json({
+      success: false,
+      message: "bio must be string or null",
+    });
+  }
+
+  const bio = (rawBio || "").trim();
+  if (bio.length > MAX_BIO_LENGTH) {
+    return res.status(400).json({
+      success: false,
+      message: `bio is too long (max ${MAX_BIO_LENGTH})`,
+    });
+  }
+
+  try {
+    const updatedUser = await db.updateUserBioById(userId, bio || null);
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        user_id: updatedUser.user_id,
+        username: updatedUser.username,
+        role: updatedUser.role,
+        email: updatedUser.email,
+        img_path: updatedUser.img_path || null,
+        bio: updatedUser.bio || "",
+      },
+    });
+  } catch (err) {
+    console.error("update profile error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+app.post("/api/my_info/works", authenticateToken, async (req: Request, res: Response) => {
+  const userId = req.user?.user_id;
+  const { image_path, description } = req.body as {
+    image_path?: string;
+    description?: string | null;
+  };
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    });
+  }
+
+  const imagePath = (image_path || "").trim();
+  if (!imagePath) {
+    return res.status(400).json({
+      success: false,
+      message: "image_path is required",
+    });
+  }
+  if (!imagePath.startsWith("/uploads/")) {
+    return res.status(400).json({
+      success: false,
+      message: "image_path must be under /uploads/",
+    });
+  }
+
+  if (description !== null && description !== undefined && typeof description !== "string") {
+    return res.status(400).json({
+      success: false,
+      message: "description must be string or null",
+    });
+  }
+
+  const normalizedDescription = (description || "").trim();
+  if (normalizedDescription.length > MAX_WORK_DESCRIPTION_LENGTH) {
+    return res.status(400).json({
+      success: false,
+      message: `description is too long (max ${MAX_WORK_DESCRIPTION_LENGTH})`,
+    });
+  }
+
+  try {
+    const work = await db.createUserWork({
+      userId,
+      imagePath,
+      description: normalizedDescription || null,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Work created",
+      work,
+    });
+  } catch (err) {
+    console.error("create user work error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+app.delete("/api/my_info/works/:workId", authenticateToken, async (req: Request, res: Response) => {
+  const userId = req.user?.user_id;
+  const rawWorkId = req.params.workId;
+  const workId = Array.isArray(rawWorkId) ? rawWorkId[0] : rawWorkId;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    });
+  }
+  if (!workId) {
+    return res.status(400).json({
+      success: false,
+      message: "workId is required",
+    });
+  }
+
+  try {
+    const deleted = await db.deleteUserWorkByIdAndUserId(workId, userId);
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Work not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Work deleted",
+      work: deleted,
+    });
+  } catch (err) {
+    console.error("delete user work error:", err);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
