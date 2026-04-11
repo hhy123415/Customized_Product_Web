@@ -33,6 +33,17 @@ export interface UserPublicProfileRow {
   created_at: string;
 }
 
+export interface AdminUserRow {
+  user_id: string;
+  username: string;
+  email: string;
+  role: Role;
+  img_path?: string | null;
+  bio?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserWorkRow {
   work_id: string;
   user_id: string;

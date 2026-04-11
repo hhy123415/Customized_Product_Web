@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import nodemailer from "nodemailer";
-import { authenticateToken } from "./auth";
+import { authenticateAdmin, authenticateToken } from "./auth";
 import { db } from "./dataAccess";
 
 dotenv.config();
@@ -171,6 +171,35 @@ app.get("/api/me", authenticateToken, async (req: Request, res: Response) => {
     });
   }
 });
+
+app.get(
+  "/api/admin/users",
+  authenticateToken,
+  authenticateAdmin,
+  async (req: Request, res: Response) => {
+    const rawKeyword = req.query.keyword;
+    const keyword =
+      typeof rawKeyword === "string"
+        ? rawKeyword.trim().slice(0, 100)
+        : Array.isArray(rawKeyword)
+          ? String(rawKeyword[0] ?? "").trim().slice(0, 100)
+          : "";
+
+    try {
+      const users = await db.getUsersForAdmin(keyword, 100);
+      return res.json({
+        success: true,
+        users,
+      });
+    } catch (err) {
+      console.error("admin users query error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
 
 app.get("/api/my_info", authenticateToken, async (req: Request, res: Response) => {
   const userId = req.user?.user_id;

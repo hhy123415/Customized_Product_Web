@@ -8,11 +8,10 @@ function Home() {
 
   return (
     <div className={LoginStyle.container}>
-      {/* 未登录状态*/}
       {!auth.isLoggedIn && (
         <div className={LoginStyle.card}>
           <h1 className={LoginStyle.title}>请先登录以正常使用功能</h1>
-          <p className={LoginStyle.subtitle}>登录后您可以访问完整的功能和服务</p>
+          <p className={LoginStyle.subtitle}>登录后您可以访问完整功能和服务</p>
           <div className={LoginStyle.actionArea}>
             <Link to="/login" className={LoginStyle.loginBtn}>
               立即登录
@@ -20,7 +19,7 @@ function Home() {
           </div>
         </div>
       )}
-      {/* 已登录状态 */}
+
       {auth.isLoggedIn && (
         <div className={styles.dashboardCard}>
           <div className={styles.header}>
@@ -28,59 +27,39 @@ function Home() {
           </div>
 
           <div className={styles.grid}>
-            {/* 管理员功能区 */}
             {auth.role === "admin" && (
-              <>
-                <Link
-                  to="/query"
-                  className={`${styles.menuBtn} ${styles.adminTheme}`}
-                >
-                  <span className={styles.icon}>🔍</span>
-                  查询信息
-                </Link>
-                <Link
-                  to="/audit"
-                  className={`${styles.menuBtn} ${styles.adminTheme}`}
-                >
-                  <span className={styles.icon}>📋</span>
-                  审核发布
-                </Link>
-                {/* 更多管理员专属功能 */}
-                <Link
-                  to="/manage-users"
-                  className={`${styles.menuBtn} ${styles.adminTheme}`}
-                >
-                  <span className={styles.icon}>👥</span>
-                  管理用户
-                </Link>
-              </>
+              <Link
+                to="/admin/user-query"
+                className={`${styles.menuBtn} ${styles.adminTheme}`}
+              >
+                <span className={styles.icon}>🔎</span>
+                查询用户信息
+              </Link>
             )}
 
-            {/* 企业用户功能区 */}
             {auth.role === "enterprise" && (
               <>
                 <Link
                   to="/enterprise/new-application"
-                  className={`${styles.menuBtn} ${styles.enterpriseTheme}`} // 假设有 enterpriseTheme
+                  className={`${styles.menuBtn} ${styles.enterpriseTheme}`}
                 >
-                  <span className={styles.icon}>➕</span>
+                  <span className={styles.icon}>➡</span>
                   提交企业酒店申请
                 </Link>
                 <Link
                   to="/enterprise/my-applications"
                   className={`${styles.menuBtn} ${styles.enterpriseTheme}`}
                 >
-                  <span className={styles.icon}>⏳</span>
+                  <span className={styles.icon}>🕒</span>
                   查看我的企业申请
                 </Link>
                 <Link
                   to="/enterprise/manage-hotels"
                   className={`${styles.menuBtn} ${styles.enterpriseTheme}`}
                 >
-                  <span className={styles.icon}>🏢</span>
+                  <span className={styles.icon}>🏨</span>
                   管理企业酒店列表
                 </Link>
-                {/* 更多企业用户专属功能 */}
                 <Link
                   to="/enterprise/reports"
                   className={`${styles.menuBtn} ${styles.enterpriseTheme}`}
@@ -91,28 +70,27 @@ function Home() {
               </>
             )}
 
-            {/* 普通用户功能区  */}
             {auth.role === "regular" && (
               <>
                 <Link
                   to="/new-request"
                   className={`${styles.menuBtn} ${styles.userTheme}`}
                 >
-                  <span className={styles.icon}>➕</span>
+                  <span className={styles.icon}>➡</span>
                   新的酒店申请
                 </Link>
                 <Link
                   to="/my-pending"
                   className={`${styles.menuBtn} ${styles.userTheme}`}
                 >
-                  <span className={styles.icon}>⏳</span>
+                  <span className={styles.icon}>🕒</span>
                   我的申请
                 </Link>
                 <Link
                   to="/my-hotel"
                   className={`${styles.menuBtn} ${styles.userTheme}`}
                 >
-                  <span className={styles.icon}>⚙️</span>
+                  <span className={styles.icon}>🏨</span>
                   管理我的酒店
                 </Link>
               </>

@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyAccount from "./pages/MyAccount";
 import UserRoute from "./component/UserRoute";
+import AdminRoute from "./component/AdminRoute";
 import Forget from "./pages/ForgetPassword";
 import Square from "./pages/CreativeSquare";
 import PostDetailPage from "./pages/PostDetail";
@@ -15,29 +16,46 @@ import PoolCueCustomization from "./pages/PoolCueCustomization";
 import Live2DViewer from "./component/Live2DViewer";
 import { useAuth } from "./hooks/useAuth";
 import About from "./pages/About";
+import CreatePostPage from "./pages/CreatePost";
+import AdminUserQueryPage from "./pages/AdminUserQuery";
 
-// 创建一个内部组件，以便能够使用 useAuth Hook
 const AppContent = () => {
-  // 从 AuthContext 中获取用户状态
-  // 注意：这里的 user 变量名取决于你 AuthProvider 里的定义
-  const { auth } = useAuth(); 
+  const { auth } = useAuth();
 
   return (
     <BrowserRouter>
       <div className="nav-block">
         <NavBar />
       </div>
-      
+
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forget_password" element={<Forget />} />
         <Route
+          path="/admin/user-query"
+          element={
+            <UserRoute>
+              <AdminRoute>
+                <AdminUserQueryPage />
+              </AdminRoute>
+            </UserRoute>
+          }
+        />
+        <Route
           path="/CreativeSquare"
           element={
             <UserRoute>
               <Square />
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/posts/create"
+          element={
+            <UserRoute>
+              <CreatePostPage />
             </UserRoute>
           }
         />
@@ -84,7 +102,6 @@ const AppContent = () => {
         <Route path="/about" element={<About />} />
       </Routes>
 
-      {/* 只有当 user 存在时才渲染 Live2DViewer */}
       {auth.isLoggedIn && <Live2DViewer />}
     </BrowserRouter>
   );

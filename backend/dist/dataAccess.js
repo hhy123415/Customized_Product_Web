@@ -62,6 +62,48 @@ exports.db = {
       `, [userId]);
         return result.rows[0] ?? null;
     },
+    async getUsersForAdmin(keyword, limit = 100) {
+        const normalizedKeyword = keyword.trim();
+        const wildcard = `%${normalizedKeyword}%`;
+        const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(200, Math.floor(limit))) : 100;
+        if (!normalizedKeyword) {
+            const result = await pool.query(`
+          SELECT
+            user_id,
+            username,
+            email,
+            role,
+            img_path,
+            bio,
+            created_at,
+            updated_at
+          FROM users
+          ORDER BY created_at DESC, user_id DESC
+          LIMIT $1
+        `, [safeLimit]);
+            return result.rows;
+        }
+        const result = await pool.query(`
+        SELECT
+          user_id,
+          username,
+          email,
+          role,
+          img_path,
+          bio,
+          created_at,
+          updated_at
+        FROM users
+        WHERE
+          CAST(user_id AS TEXT) ILIKE $1
+          OR username ILIKE $1
+          OR email ILIKE $1
+          OR role::TEXT ILIKE $1
+        ORDER BY created_at DESC, user_id DESC
+        LIMIT $2
+      `, [wildcard, safeLimit]);
+        return result.rows;
+    },
     async getUserWorksByUserId(userId) {
         const result = await pool.query(`
         SELECT

@@ -17,6 +17,18 @@ export interface UserWork {
 }
 
 type Role = "regular" | "enterprise" | "admin";
+
+export interface AdminUser {
+  user_id: string;
+  username: string;
+  email: string;
+  role: Role;
+  img_path?: string | null;
+  bio?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Post {
   post_id: string;
   title: string;

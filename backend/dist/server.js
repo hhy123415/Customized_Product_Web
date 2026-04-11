@@ -154,6 +154,28 @@ app.get("/api/me", auth_1.authenticateToken, async (req, res) => {
         });
     }
 });
+app.get("/api/admin/users", auth_1.authenticateToken, auth_1.authenticateAdmin, async (req, res) => {
+    const rawKeyword = req.query.keyword;
+    const keyword = typeof rawKeyword === "string"
+        ? rawKeyword.trim().slice(0, 100)
+        : Array.isArray(rawKeyword)
+            ? String(rawKeyword[0] ?? "").trim().slice(0, 100)
+            : "";
+    try {
+        const users = await dataAccess_1.db.getUsersForAdmin(keyword, 100);
+        return res.json({
+            success: true,
+            users,
+        });
+    }
+    catch (err) {
+        console.error("admin users query error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+});
 app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
     const userId = req.user?.user_id;
     try {
