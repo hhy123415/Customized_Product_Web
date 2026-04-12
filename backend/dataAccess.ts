@@ -1,7 +1,11 @@
+import { randomUUID } from "crypto";
 import { Pool } from "pg";
 import type {
   AdminUserRow,
   CommentRow,
+  ProductCustomizationPageRow,
+  ProductPageParameterInput,
+  ProductPageStatus,
   PostDetailRow,
   PostRow,
   UserPublicProfileRow,
@@ -171,6 +175,241 @@ export const db = {
         LIMIT $2
       `,
       [wildcard, safeLimit],
+    );
+    return result.rows;
+  },
+
+  async getProductCustomizationPagesByUserId(
+    userId: string,
+    status?: ProductPageStatus,
+  ): Promise<ProductCustomizationPageRow[]> {
+    const params: string[] = [userId];
+    const conditions = ["p.user_id = $1"];
+
+    if (status) {
+      params.push(status);
+      conditions.push(`p.status = $${params.length}`);
+    }
+
+    const result = await pool.query<ProductCustomizationPageRow>(
+      `
+        SELECT
+          p.page_id,
+          p.user_id,
+          p.product_name,
+          p.product_summary,
+          p.parameters,
+          p.status,
+          p.review_comment,
+          p.reviewed_by,
+          p.reviewed_at,
+          p.created_at,
+          p.updated_at,
+          u.username AS publisher_username,
+          reviewer.username AS reviewer_username
+        FROM product_customization_pages p
+        JOIN users u ON u.user_id = p.user_id
+        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY p.updated_at DESC, p.page_id DESC
+      `,
+      params,
+    );
+    return result.rows;
+  },
+
+  async getProductCustomizationPageById(pageId: string): Promise<ProductCustomizationPageRow | null> {
+    const result = await pool.query<ProductCustomizationPageRow>(
+      `
+        SELECT
+          p.page_id,
+          p.user_id,
+          p.product_name,
+          p.product_summary,
+          p.parameters,
+          p.status,
+          p.review_comment,
+          p.reviewed_by,
+          p.reviewed_at,
+          p.created_at,
+          p.updated_at,
+          u.username AS publisher_username,
+          reviewer.username AS reviewer_username
+        FROM product_customization_pages p
+        JOIN users u ON u.user_id = p.user_id
+        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
+        WHERE p.page_id = $1
+      `,
+      [pageId],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  async saveProductCustomizationPage(params: {
+    pageId?: string;
+    userId: string;
+    productName: string;
+    productSummary: string | null;
+    parameters: ProductPageParameterInput[];
+  }): Promise<ProductCustomizationPageRow> {
+    const { pageId, userId, productName, productSummary, parameters } = params;
+    const normalizedParameters = JSON.stringify(parameters);
+
+    if (pageId) {
+      const updated = await pool.query<{ page_id: string }>(
+        `
+          UPDATE product_customization_pages
+          SET
+            product_name = $1,
+            product_summary = $2,
+            parameters = $3::jsonb,
+            status = 'draft',
+            review_comment = NULL,
+            reviewed_by = NULL,
+            reviewed_at = NULL,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE page_id = $4 AND user_id = $5
+          RETURNING page_id
+        `,
+        [productName, productSummary, normalizedParameters, pageId, userId],
+      );
+
+      if (updated.rows[0]) {
+        return (await this.getProductCustomizationPageById(updated.rows[0].page_id)) as ProductCustomizationPageRow;
+      }
+    }
+
+    const createdPageId = pageId || randomUUID();
+    await pool.query(
+      `
+        INSERT INTO product_customization_pages (
+          page_id,
+          user_id,
+          product_name,
+          product_summary,
+          parameters,
+          status
+        )
+        VALUES ($1, $2, $3, $4, $5::jsonb, 'draft')
+      `,
+      [createdPageId, userId, productName, productSummary, normalizedParameters],
+    );
+
+    return (await this.getProductCustomizationPageById(createdPageId)) as ProductCustomizationPageRow;
+  },
+
+  async submitProductCustomizationPage(
+    pageId: string,
+    userId: string,
+  ): Promise<ProductCustomizationPageRow | null> {
+    const updated = await pool.query<{ page_id: string }>(
+      `
+        UPDATE product_customization_pages
+        SET
+          status = 'pending_review',
+          review_comment = NULL,
+          reviewed_by = NULL,
+          reviewed_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE page_id = $1 AND user_id = $2
+        RETURNING page_id
+      `,
+      [pageId, userId],
+    );
+
+    if (!updated.rows[0]) {
+      return null;
+    }
+
+    return this.getProductCustomizationPageById(pageId);
+  },
+
+  async getProductCustomizationPagesForAdmin(
+    status?: ProductPageStatus,
+  ): Promise<ProductCustomizationPageRow[]> {
+    const params: string[] = [];
+    const whereClause = status ? "WHERE p.status = $1" : "";
+    if (status) {
+      params.push(status);
+    }
+
+    const result = await pool.query<ProductCustomizationPageRow>(
+      `
+        SELECT
+          p.page_id,
+          p.user_id,
+          p.product_name,
+          p.product_summary,
+          p.parameters,
+          p.status,
+          p.review_comment,
+          p.reviewed_by,
+          p.reviewed_at,
+          p.created_at,
+          p.updated_at,
+          u.username AS publisher_username,
+          reviewer.username AS reviewer_username
+        FROM product_customization_pages p
+        JOIN users u ON u.user_id = p.user_id
+        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
+        ${whereClause}
+        ORDER BY
+          CASE WHEN p.status = 'pending_review' THEN 0 ELSE 1 END,
+          p.updated_at DESC,
+          p.page_id DESC
+      `,
+      params,
+    );
+    return result.rows;
+  },
+
+  async reviewProductCustomizationPage(params: {
+    pageId: string;
+    reviewerId: string;
+    status: Extract<ProductPageStatus, "approved" | "rejected">;
+    reviewComment: string | null;
+  }): Promise<ProductCustomizationPageRow | null> {
+    const { pageId, reviewerId, status, reviewComment } = params;
+    const updated = await pool.query<{ page_id: string }>(
+      `
+        UPDATE product_customization_pages
+        SET
+          status = $1,
+          review_comment = $2,
+          reviewed_by = $3,
+          reviewed_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE page_id = $4
+        RETURNING page_id
+      `,
+      [status, reviewComment, reviewerId, pageId],
+    );
+
+    if (!updated.rows[0]) {
+      return null;
+    }
+
+    return this.getProductCustomizationPageById(pageId);
+  },
+
+  async getPublicProductCustomizationPages(): Promise<ProductCustomizationPageRow[]> {
+    const result = await pool.query<ProductCustomizationPageRow>(
+      `
+        SELECT
+          p.page_id,
+          p.user_id,
+          p.product_name,
+          p.product_summary,
+          p.parameters,
+          p.status,
+          p.created_at,
+          p.updated_at,
+          u.username AS publisher_username
+        FROM product_customization_pages p
+        JOIN users u ON u.user_id = p.user_id
+        WHERE p.status = 'approved'
+        ORDER BY p.created_at DESC, p.page_id DESC
+      `
     );
     return result.rows;
   },

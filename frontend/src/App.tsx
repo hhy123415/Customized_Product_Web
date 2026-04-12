@@ -8,6 +8,7 @@ import Register from "./pages/Register";
 import MyAccount from "./pages/MyAccount";
 import UserRoute from "./component/UserRoute";
 import AdminRoute from "./component/AdminRoute";
+import EnterpriseRoute from "./component/EnterpriseRoute";
 import Forget from "./pages/ForgetPassword";
 import Square from "./pages/CreativeSquare";
 import PostDetailPage from "./pages/PostDetail";
@@ -18,6 +19,9 @@ import { useAuth } from "./hooks/useAuth";
 import About from "./pages/About";
 import CreatePostPage from "./pages/CreatePost";
 import AdminUserQueryPage from "./pages/AdminUserQuery";
+import EnterpriseProductPageEditor from "./pages/EnterpriseProductPageEditor";
+import AdminProductPageReview from "./pages/AdminProductPageReview";
+import DynamicProductCustomization from "./pages/DynamicProductCustomization";
 
 const AppContent = () => {
   const { auth } = useAuth();
@@ -40,6 +44,26 @@ const AppContent = () => {
               <AdminRoute>
                 <AdminUserQueryPage />
               </AdminRoute>
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/admin/product-pages/review"
+          element={
+            <UserRoute>
+              <AdminRoute>
+                <AdminProductPageReview />
+              </AdminRoute>
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/enterprise/product-pages/editor"
+          element={
+            <UserRoute>
+              <EnterpriseRoute>
+                <EnterpriseProductPageEditor />
+              </EnterpriseRoute>
             </UserRoute>
           }
         />
@@ -80,6 +104,15 @@ const AppContent = () => {
           element={
             <UserRoute>
               <PoolCueCustomization />
+            </UserRoute>
+          }
+        />
+        {/* --- 动态定制产品页面路由 --- */}
+        <Route
+          path="/product-customization/dynamic/:pageId"
+          element={
+            <UserRoute>
+              <DynamicProductCustomization />
             </UserRoute>
           }
         />

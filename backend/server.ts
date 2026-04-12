@@ -5,12 +5,14 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import axios from "axios";
+import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
 import nodemailer from "nodemailer";
 import { authenticateAdmin, authenticateToken } from "./auth";
 import { db } from "./dataAccess";
+import type { ProductPageParameterInput, ProductPageStatus } from "./Interface";
 
 dotenv.config();
 
@@ -28,8 +30,14 @@ const SMTP_PASS = process.env.SMTP_PASS || "";
 const EMAIL_FROM = process.env.EMAIL_FROM || SMTP_USER;
 
 // 验证码配置
-const VERIFICATION_CODE_EXPIRY_MINUTES = parseInt(process.env.VERIFICATION_CODE_EXPIRY_MINUTES || "10", 10);
-const MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES = parseInt(process.env.MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES || "3", 10);
+const VERIFICATION_CODE_EXPIRY_MINUTES = parseInt(
+  process.env.VERIFICATION_CODE_EXPIRY_MINUTES || "10",
+  10,
+);
+const MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES = parseInt(
+  process.env.MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES || "3",
+  10,
+);
 
 // 创建邮件传输器
 const createTransporter = () => {
@@ -50,7 +58,10 @@ const generateVerificationCode = (): string => {
 };
 
 // 发送验证码邮件
-const sendVerificationEmail = async (email: string, code: string): Promise<boolean> => {
+const sendVerificationEmail = async (
+  email: string,
+  code: string,
+): Promise<boolean> => {
   try {
     const transporter = createTransporter();
 
@@ -82,8 +93,7 @@ const sendVerificationEmail = async (email: string, code: string): Promise<boole
   }
 };
 
-db
-  .checkConnection()
+db.checkConnection()
   .then(() => {
     console.log("数据库连接成功");
   })
@@ -133,6 +143,85 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 const SECRET_KEY = process.env.JWT_SECRET || "";
 const MAX_BIO_LENGTH = 500;
 const MAX_WORK_DESCRIPTION_LENGTH = 200;
+const MAX_PRODUCT_NAME_LENGTH = 120;
+const MAX_PRODUCT_SUMMARY_LENGTH = 1000;
+const MAX_REVIEW_COMMENT_LENGTH = 500;
+const MAX_PARAMETER_COUNT = 20;
+const MAX_PARAMETER_NAME_LENGTH = 50;
+const MAX_PARAMETER_OPTION_COUNT = 20;
+const PRODUCT_PAGE_STATUS_VALUES: ProductPageStatus[] = [
+  "draft",
+  "pending_review",
+  "approved",
+  "rejected",
+];
+
+const isEnterpriseUser = (req: Request) => req.user?.role === "enterprise";
+
+const normalizeProductPageParameters = (
+  input: unknown,
+): ProductPageParameterInput[] => {
+  if (!Array.isArray(input)) {
+    throw new Error("parameters must be an array");
+  }
+
+  if (input.length > MAX_PARAMETER_COUNT) {
+    throw new Error(`parameters cannot exceed ${MAX_PARAMETER_COUNT}`);
+  }
+
+  return input.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw new Error(`parameter ${index + 1} is invalid`);
+    }
+
+    const raw = item as Record<string, unknown>;
+    const name = String(raw.name || "").trim();
+    const type = String(raw.type || "").trim();
+    const required = Boolean(raw.required);
+    const unit = String(raw.unit || "").trim();
+    const defaultValue = String(
+      raw.default_value || raw.defaultValue || "",
+    ).trim();
+    const optionsInput = Array.isArray(raw.options) ? raw.options : [];
+
+    if (!name) {
+      throw new Error(`parameter ${index + 1} name is required`);
+    }
+
+    if (name.length > MAX_PARAMETER_NAME_LENGTH) {
+      throw new Error(`parameter ${index + 1} name is too long`);
+    }
+
+    if (!["text", "number", "select"].includes(type)) {
+      throw new Error(`parameter ${index + 1} type is invalid`);
+    }
+
+    const options =
+      type === "select"
+        ? optionsInput
+            .map((option) => String(option || "").trim())
+            .filter(Boolean)
+            .slice(0, MAX_PARAMETER_OPTION_COUNT)
+        : [];
+
+    if (type === "select" && options.length === 0) {
+      throw new Error(`parameter ${index + 1} requires at least one option`);
+    }
+
+    return {
+      id:
+        typeof raw.id === "string" && raw.id.trim()
+          ? raw.id.trim()
+          : randomUUID(),
+      name,
+      type: type as ProductPageParameterInput["type"],
+      required,
+      unit: unit || null,
+      default_value: defaultValue || null,
+      options,
+    };
+  });
+};
 
 app.get("/api/me", authenticateToken, async (req: Request, res: Response) => {
   const userId = req.user?.user_id;
@@ -182,7 +271,9 @@ app.get(
       typeof rawKeyword === "string"
         ? rawKeyword.trim().slice(0, 100)
         : Array.isArray(rawKeyword)
-          ? String(rawKeyword[0] ?? "").trim().slice(0, 100)
+          ? String(rawKeyword[0] ?? "")
+              .trim()
+              .slice(0, 100)
           : "";
 
     try {
@@ -201,305 +292,661 @@ app.get(
   },
 );
 
-app.get("/api/my_info", authenticateToken, async (req: Request, res: Response) => {
-  const userId = req.user?.user_id;
+app.get(
+  "/api/enterprise/product-pages",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    if (!isEnterpriseUser(req)) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
 
-  try {
-    const user = await db.getUserById(userId);
+    const userId = req.user?.user_id;
+    const rawStatus = req.query.status;
+    const status =
+      typeof rawStatus === "string" &&
+      PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus as ProductPageStatus)
+        ? (rawStatus as ProductPageStatus)
+        : undefined;
 
-    if (!user) {
-      return res.status(404).json({
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    try {
+      const pages = await db.getProductCustomizationPagesByUserId(
+        userId,
+        status,
+      );
+      return res.json({ success: true, pages });
+    } catch (err) {
+      console.error("get enterprise product pages error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
+
+app.get(
+  "/api/enterprise/product-pages/:pageId",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    if (!isEnterpriseUser(req)) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    const userId = req.user?.user_id;
+    const pageId = Array.isArray(req.params.pageId)
+      ? req.params.pageId[0]
+      : req.params.pageId;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    if (!pageId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "pageId is required" });
+    }
+
+    try {
+      const page = await db.getProductCustomizationPageById(pageId);
+      if (!page || page.user_id !== userId) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Page not found" });
+      }
+
+      return res.json({ success: true, page });
+    } catch (err) {
+      console.error("get enterprise product page detail error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
+
+app.post(
+  "/api/enterprise/product-pages",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    if (!isEnterpriseUser(req)) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    const userId = req.user?.user_id;
+    const { page_id, product_name, product_summary, parameters } = req.body as {
+      page_id?: string;
+      product_name?: string;
+      product_summary?: string;
+      parameters?: unknown;
+    };
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const productName = (product_name || "").trim();
+    const productSummary = (product_summary || "").trim();
+
+    if (!productName) {
+      return res
+        .status(400)
+        .json({ success: false, message: "product_name is required" });
+    }
+
+    if (productName.length > MAX_PRODUCT_NAME_LENGTH) {
+      return res
+        .status(400)
+        .json({ success: false, message: "product_name is too long" });
+    }
+
+    if (productSummary.length > MAX_PRODUCT_SUMMARY_LENGTH) {
+      return res
+        .status(400)
+        .json({ success: false, message: "product_summary is too long" });
+    }
+
+    try {
+      const normalizedParameters = normalizeProductPageParameters(
+        parameters || [],
+      );
+      const page = await db.saveProductCustomizationPage({
+        pageId:
+          typeof page_id === "string" && page_id.trim()
+            ? page_id.trim()
+            : undefined,
+        userId,
+        productName,
+        productSummary: productSummary || null,
+        parameters: normalizedParameters,
+      });
+
+      return res.status(201).json({ success: true, page });
+    } catch (err) {
+      console.error("save enterprise product page error:", err);
+      return res.status(400).json({
         success: false,
-        message: "用户不存在",
+        message: err instanceof Error ? err.message : "Invalid request",
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/enterprise/product-pages/:pageId/submit",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    if (!isEnterpriseUser(req)) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    const userId = req.user?.user_id;
+    const pageId = Array.isArray(req.params.pageId)
+      ? req.params.pageId[0]
+      : req.params.pageId;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    if (!pageId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "pageId is required" });
+    }
+
+    try {
+      const existingPage = await db.getProductCustomizationPageById(pageId);
+      if (!existingPage || existingPage.user_id !== userId) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Page not found" });
+      }
+
+      if (existingPage.parameters.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "At least one parameter is required before submit",
+        });
+      }
+
+      const page = await db.submitProductCustomizationPage(pageId, userId);
+      return res.json({ success: true, page });
+    } catch (err) {
+      console.error("submit enterprise product page error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
+
+app.get(
+  "/api/admin/product-pages",
+  authenticateToken,
+  authenticateAdmin,
+  async (req: Request, res: Response) => {
+    const rawStatus = req.query.status;
+    const status =
+      typeof rawStatus === "string" &&
+      PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus as ProductPageStatus)
+        ? (rawStatus as ProductPageStatus)
+        : undefined;
+
+    try {
+      const pages = await db.getProductCustomizationPagesForAdmin(status);
+      return res.json({ success: true, pages });
+    } catch (err) {
+      console.error("get admin product pages error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/product-pages/:pageId/review",
+  authenticateToken,
+  authenticateAdmin,
+  async (req: Request, res: Response) => {
+    const reviewerId = req.user?.user_id;
+    const pageId = Array.isArray(req.params.pageId)
+      ? req.params.pageId[0]
+      : req.params.pageId;
+    const { action, review_comment } = req.body as {
+      action?: string;
+      review_comment?: string;
+    };
+
+    if (!reviewerId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    if (!pageId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "pageId is required" });
+    }
+
+    const nextStatus =
+      action === "approve"
+        ? "approved"
+        : action === "reject"
+          ? "rejected"
+          : null;
+    if (!nextStatus) {
+      return res
+        .status(400)
+        .json({ success: false, message: "action must be approve or reject" });
+    }
+
+    const reviewComment = (review_comment || "").trim();
+    if (reviewComment.length > MAX_REVIEW_COMMENT_LENGTH) {
+      return res
+        .status(400)
+        .json({ success: false, message: "review_comment is too long" });
+    }
+
+    try {
+      const page = await db.reviewProductCustomizationPage({
+        pageId,
+        reviewerId,
+        status: nextStatus,
+        reviewComment: reviewComment || null,
+      });
+
+      if (!page) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Page not found" });
+      }
+
+      return res.json({ success: true, page });
+    } catch (err) {
+      console.error("review product page error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
+
+/**
+ * 获取所有已审核通过的产品定制页面 (公开接口)
+ * 路径: GET /api/public/product-customization-pages
+ */
+app.get(
+  "/api/public/product-customization-pages",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const pages = await db.getPublicProductCustomizationPages();
+      return res.json({ success: true, pages });
+    } catch (err) {
+      console.error("fetch public product pages error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
+
+app.get(
+  "/api/public/product-customization-pages/:pageId",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const pageId = Array.isArray(req.params.pageId)
+      ? req.params.pageId[0]
+      : req.params.pageId;
+    try {
+      const page = await db.getProductCustomizationPageById(pageId);
+      if (!page || page.status !== "approved") {
+        return res
+          .status(404)
+          .json({ success: false, message: "Page not found or not approved" });
+      }
+      return res.json({ success: true, page });
+    } catch (err) {
+      return res.status(500).json({ success: false });
+    }
+  },
+);
+
+app.get(
+  "/api/my_info",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+
+    try {
+      const user = await db.getUserById(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "用户不存在",
+        });
+      }
+
+      res.json({
+        success: true,
+        user: {
+          user_id: user.user_id,
+          username: req.user?.username,
+          role: req.user?.role,
+          email: user.email,
+          img_path: user.img_path || null,
+          bio: user.bio || "",
+        },
+      });
+    } catch (err) {
+      console.error("my_info 错误:", err);
+      res.status(500).json({
+        success: false,
+        message: "服务器内部错误",
+      });
+    }
+  },
+);
+
+app.get(
+  "/api/users/:userId/profile",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const rawUserId = req.params.userId;
+    const targetUserId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+    const currentUserId = req.user?.user_id;
+
+    if (!targetUserId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required",
       });
     }
 
-    res.json({
-      success: true,
-      user: {
-        user_id: user.user_id,
-        username: req.user?.username,
-        role: req.user?.role,
-        email: user.email,
-        img_path: user.img_path || null,
-        bio: user.bio || "",
-      },
-    });
-  } catch (err) {
-    console.error("my_info 错误:", err);
-    res.status(500).json({
-      success: false,
-      message: "服务器内部错误",
-    });
-  }
-});
+    try {
+      const user = await db.getUserPublicProfileById(targetUserId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
-app.get("/api/users/:userId/profile", authenticateToken, async (req: Request, res: Response) => {
-  const rawUserId = req.params.userId;
-  const targetUserId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
-  const currentUserId = req.user?.user_id;
+      const works = await db.getUserWorksByUserId(targetUserId);
+      const isOwner = Boolean(currentUserId && currentUserId === targetUserId);
 
-  if (!targetUserId) {
-    return res.status(400).json({
-      success: false,
-      message: "userId is required",
-    });
-  }
-
-  try {
-    const user = await db.getUserPublicProfileById(targetUserId);
-    if (!user) {
-      return res.status(404).json({
+      return res.json({
+        success: true,
+        is_owner: isOwner,
+        user: {
+          user_id: user.user_id,
+          username: user.username,
+          role: user.role,
+          img_path: user.img_path || null,
+          bio: user.bio || "",
+          created_at: user.created_at,
+        },
+        works,
+      });
+    } catch (err) {
+      console.error("get user profile error:", err);
+      return res.status(500).json({
         success: false,
-        message: "User not found",
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+app.put(
+  "/api/my_info/avatar",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const { img_path } = req.body as { img_path?: string | null };
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
       });
     }
 
-    const works = await db.getUserWorksByUserId(targetUserId);
-    const isOwner = Boolean(currentUserId && currentUserId === targetUserId);
-
-    return res.json({
-      success: true,
-      is_owner: isOwner,
-      user: {
-        user_id: user.user_id,
-        username: user.username,
-        role: user.role,
-        img_path: user.img_path || null,
-        bio: user.bio || "",
-        created_at: user.created_at,
-      },
-      works,
-    });
-  } catch (err) {
-    console.error("get user profile error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
-
-app.put("/api/my_info/avatar", authenticateToken, async (req: Request, res: Response) => {
-  const userId = req.user?.user_id;
-  const { img_path } = req.body as { img_path?: string | null };
-
-  if (!userId) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized",
-    });
-  }
-
-  if (img_path !== null && typeof img_path !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "img_path must be string or null",
-    });
-  }
-
-  if (typeof img_path === "string" && !img_path.startsWith("/uploads/")) {
-    return res.status(400).json({
-      success: false,
-      message: "img_path must be under /uploads/",
-    });
-  }
-
-  try {
-    const updatedUser = await db.updateUserImagePathById(userId, img_path ?? null);
-
-    if (!updatedUser) {
-      return res.status(404).json({
+    if (img_path !== null && typeof img_path !== "string") {
+      return res.status(400).json({
         success: false,
-        message: "User not found",
+        message: "img_path must be string or null",
       });
     }
 
-    return res.json({
-      success: true,
-      message: "Avatar updated successfully",
-      user: {
-        username: updatedUser.username,
-        role: updatedUser.role,
-        email: updatedUser.email,
-        img_path: updatedUser.img_path || null,
-      },
-    });
-  } catch (err) {
-    console.error("update avatar error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
-
-app.put("/api/my_info/profile", authenticateToken, async (req: Request, res: Response) => {
-  const userId = req.user?.user_id;
-  const rawBio = (req.body as { bio?: string | null }).bio;
-
-  if (!userId) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized",
-    });
-  }
-
-  if (rawBio !== null && rawBio !== undefined && typeof rawBio !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "bio must be string or null",
-    });
-  }
-
-  const bio = (rawBio || "").trim();
-  if (bio.length > MAX_BIO_LENGTH) {
-    return res.status(400).json({
-      success: false,
-      message: `bio is too long (max ${MAX_BIO_LENGTH})`,
-    });
-  }
-
-  try {
-    const updatedUser = await db.updateUserBioById(userId, bio || null);
-    if (!updatedUser) {
-      return res.status(404).json({
+    if (typeof img_path === "string" && !img_path.startsWith("/uploads/")) {
+      return res.status(400).json({
         success: false,
-        message: "User not found",
+        message: "img_path must be under /uploads/",
       });
     }
 
-    return res.json({
-      success: true,
-      message: "Profile updated successfully",
-      user: {
-        user_id: updatedUser.user_id,
-        username: updatedUser.username,
-        role: updatedUser.role,
-        email: updatedUser.email,
-        img_path: updatedUser.img_path || null,
-        bio: updatedUser.bio || "",
-      },
-    });
-  } catch (err) {
-    console.error("update profile error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
+    try {
+      const updatedUser = await db.updateUserImagePathById(
+        userId,
+        img_path ?? null,
+      );
 
-app.post("/api/my_info/works", authenticateToken, async (req: Request, res: Response) => {
-  const userId = req.user?.user_id;
-  const { image_path, description } = req.body as {
-    image_path?: string;
-    description?: string | null;
-  };
+      if (!updatedUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
-  if (!userId) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized",
-    });
-  }
-
-  const imagePath = (image_path || "").trim();
-  if (!imagePath) {
-    return res.status(400).json({
-      success: false,
-      message: "image_path is required",
-    });
-  }
-  if (!imagePath.startsWith("/uploads/")) {
-    return res.status(400).json({
-      success: false,
-      message: "image_path must be under /uploads/",
-    });
-  }
-
-  if (description !== null && description !== undefined && typeof description !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "description must be string or null",
-    });
-  }
-
-  const normalizedDescription = (description || "").trim();
-  if (normalizedDescription.length > MAX_WORK_DESCRIPTION_LENGTH) {
-    return res.status(400).json({
-      success: false,
-      message: `description is too long (max ${MAX_WORK_DESCRIPTION_LENGTH})`,
-    });
-  }
-
-  try {
-    const work = await db.createUserWork({
-      userId,
-      imagePath,
-      description: normalizedDescription || null,
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Work created",
-      work,
-    });
-  } catch (err) {
-    console.error("create user work error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
-
-app.delete("/api/my_info/works/:workId", authenticateToken, async (req: Request, res: Response) => {
-  const userId = req.user?.user_id;
-  const rawWorkId = req.params.workId;
-  const workId = Array.isArray(rawWorkId) ? rawWorkId[0] : rawWorkId;
-
-  if (!userId) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized",
-    });
-  }
-  if (!workId) {
-    return res.status(400).json({
-      success: false,
-      message: "workId is required",
-    });
-  }
-
-  try {
-    const deleted = await db.deleteUserWorkByIdAndUserId(workId, userId);
-    if (!deleted) {
-      return res.status(404).json({
+      return res.json({
+        success: true,
+        message: "Avatar updated successfully",
+        user: {
+          username: updatedUser.username,
+          role: updatedUser.role,
+          email: updatedUser.email,
+          img_path: updatedUser.img_path || null,
+        },
+      });
+    } catch (err) {
+      console.error("update avatar error:", err);
+      return res.status(500).json({
         success: false,
-        message: "Work not found",
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+app.put(
+  "/api/my_info/profile",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const rawBio = (req.body as { bio?: string | null }).bio;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
       });
     }
 
-    return res.json({
-      success: true,
-      message: "Work deleted",
-      work: deleted,
-    });
-  } catch (err) {
-    console.error("delete user work error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
+    if (rawBio !== null && rawBio !== undefined && typeof rawBio !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "bio must be string or null",
+      });
+    }
+
+    const bio = (rawBio || "").trim();
+    if (bio.length > MAX_BIO_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `bio is too long (max ${MAX_BIO_LENGTH})`,
+      });
+    }
+
+    try {
+      const updatedUser = await db.updateUserBioById(userId, bio || null);
+      if (!updatedUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Profile updated successfully",
+        user: {
+          user_id: updatedUser.user_id,
+          username: updatedUser.username,
+          role: updatedUser.role,
+          email: updatedUser.email,
+          img_path: updatedUser.img_path || null,
+          bio: updatedUser.bio || "",
+        },
+      });
+    } catch (err) {
+      console.error("update profile error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/my_info/works",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const { image_path, description } = req.body as {
+      image_path?: string;
+      description?: string | null;
+    };
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const imagePath = (image_path || "").trim();
+    if (!imagePath) {
+      return res.status(400).json({
+        success: false,
+        message: "image_path is required",
+      });
+    }
+    if (!imagePath.startsWith("/uploads/")) {
+      return res.status(400).json({
+        success: false,
+        message: "image_path must be under /uploads/",
+      });
+    }
+
+    if (
+      description !== null &&
+      description !== undefined &&
+      typeof description !== "string"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "description must be string or null",
+      });
+    }
+
+    const normalizedDescription = (description || "").trim();
+    if (normalizedDescription.length > MAX_WORK_DESCRIPTION_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `description is too long (max ${MAX_WORK_DESCRIPTION_LENGTH})`,
+      });
+    }
+
+    try {
+      const work = await db.createUserWork({
+        userId,
+        imagePath,
+        description: normalizedDescription || null,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Work created",
+        work,
+      });
+    } catch (err) {
+      console.error("create user work error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+app.delete(
+  "/api/my_info/works/:workId",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const rawWorkId = req.params.workId;
+    const workId = Array.isArray(rawWorkId) ? rawWorkId[0] : rawWorkId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+    if (!workId) {
+      return res.status(400).json({
+        success: false,
+        message: "workId is required",
+      });
+    }
+
+    try {
+      const deleted = await db.deleteUserWorkByIdAndUserId(workId, userId);
+      if (!deleted) {
+        return res.status(404).json({
+          success: false,
+          message: "Work not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Work deleted",
+        work: deleted,
+      });
+    } catch (err) {
+      console.error("delete user work error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
 
 // 发送邮箱验证码
 app.post("/api/send-verification-code", async (req: Request, res: Response) => {
   const { email } = req.body;
-  const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-  const userAgent = req.headers['user-agent'];
+  const ipAddress =
+    req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+  const userAgent = req.headers["user-agent"];
 
   try {
     if (!email) {
@@ -538,14 +985,16 @@ app.post("/api/send-verification-code", async (req: Request, res: Response) => {
 
     // 生成验证码
     const code = generateVerificationCode();
-    const expiresAt = new Date(Date.now() + VERIFICATION_CODE_EXPIRY_MINUTES * 60 * 1000);
+    const expiresAt = new Date(
+      Date.now() + VERIFICATION_CODE_EXPIRY_MINUTES * 60 * 1000,
+    );
 
     // 保存验证码到数据库
     await db.createVerificationCode({
       email,
       code,
       expiresAt,
-      ipAddress: typeof ipAddress === 'string' ? ipAddress : undefined,
+      ipAddress: typeof ipAddress === "string" ? ipAddress : undefined,
       userAgent,
     });
 
@@ -615,7 +1064,8 @@ app.post("/api/verify-email-code", async (req: Request, res: Response) => {
 });
 
 app.post("/api/register", async (req: Request, res: Response) => {
-  const { username, password, email, registerCode, role, verificationCode } = req.body;
+  const { username, password, email, registerCode, role, verificationCode } =
+    req.body;
   const allowedRoles = ["regular", "enterprise", "admin"];
 
   try {
@@ -634,7 +1084,10 @@ app.post("/api/register", async (req: Request, res: Response) => {
       });
     }
 
-    const validVerificationCode = await db.getValidVerificationCode(email, verificationCode);
+    const validVerificationCode = await db.getValidVerificationCode(
+      email,
+      verificationCode,
+    );
     if (!validVerificationCode) {
       return res.status(400).json({
         success: false,
@@ -821,111 +1274,123 @@ app.post("/api/forget2", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/posts", authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const posts = await db.getPostsWithAuthor();
+app.get(
+  "/api/posts",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const posts = await db.getPostsWithAuthor();
 
-    res.json({
-      success: true,
-      posts,
-    });
-  } catch (err) {
-    console.error("posts 错误:", err);
-    res.status(500).json({
-      success: false,
-      message: "服务器内部错误",
-    });
-  }
-});
-
-app.post("/api/posts", authenticateToken, async (req: Request, res: Response) => {
-  const userId = req.user?.user_id;
-  const { title, content } = req.body as {
-    title?: string;
-    content?: string;
-  };
-
-  const trimmedTitle = (title || "").trim();
-  const trimmedContent = (content || "").trim();
-
-  if (!userId) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized",
-    });
-  }
-
-  if (!trimmedTitle || !trimmedContent) {
-    return res.status(400).json({
-      success: false,
-      message: "title and content are required",
-    });
-  }
-
-  if (trimmedTitle.length > 255) {
-    return res.status(400).json({
-      success: false,
-      message: "title is too long (max 255)",
-    });
-  }
-
-  try {
-    const post = await db.createPost({
-      userId,
-      title: trimmedTitle,
-      content: trimmedContent,
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Post created",
-      post,
-    });
-  } catch (err) {
-    console.error("create post error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
-
-app.get("/api/posts/:postId", authenticateToken, async (req: Request, res: Response) => {
-  const rawPostId = req.params.postId;
-  const postId = Array.isArray(rawPostId) ? rawPostId[0] : rawPostId;
-
-  if (!postId) {
-    return res.status(400).json({
-      success: false,
-      message: "postId is required",
-    });
-  }
-
-  try {
-    const post = await db.getPostDetailById(postId);
-
-    if (!post) {
-      return res.status(404).json({
+      res.json({
+        success: true,
+        posts,
+      });
+    } catch (err) {
+      console.error("posts 错误:", err);
+      res.status(500).json({
         success: false,
-        message: "Post not found",
+        message: "服务器内部错误",
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/posts",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const { title, content } = req.body as {
+      title?: string;
+      content?: string;
+    };
+
+    const trimmedTitle = (title || "").trim();
+    const trimmedContent = (content || "").trim();
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
       });
     }
 
-    const comments = await db.getCommentsByPostId(postId);
+    if (!trimmedTitle || !trimmedContent) {
+      return res.status(400).json({
+        success: false,
+        message: "title and content are required",
+      });
+    }
 
-    return res.json({
-      success: true,
-      post,
-      comments,
-    });
-  } catch (err) {
-    console.error("get post detail error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
+    if (trimmedTitle.length > 255) {
+      return res.status(400).json({
+        success: false,
+        message: "title is too long (max 255)",
+      });
+    }
+
+    try {
+      const post = await db.createPost({
+        userId,
+        title: trimmedTitle,
+        content: trimmedContent,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Post created",
+        post,
+      });
+    } catch (err) {
+      console.error("create post error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+app.get(
+  "/api/posts/:postId",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const rawPostId = req.params.postId;
+    const postId = Array.isArray(rawPostId) ? rawPostId[0] : rawPostId;
+
+    if (!postId) {
+      return res.status(400).json({
+        success: false,
+        message: "postId is required",
+      });
+    }
+
+    try {
+      const post = await db.getPostDetailById(postId);
+
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: "Post not found",
+        });
+      }
+
+      const comments = await db.getCommentsByPostId(postId);
+
+      return res.json({
+        success: true,
+        post,
+        comments,
+      });
+    } catch (err) {
+      console.error("get post detail error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
 
 app.post(
   "/api/posts/:postId/comments",
@@ -1037,101 +1502,109 @@ app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
   next(err);
 });
 
-app.post("/api/chat", authenticateToken, async (req: Request, res: Response) => {
-  try {
-    if (!DIFY_API_URL || !DIFY_API_KEY) {
-      return res.status(500).json({
-        error: "Dify is not configured. Please set DIFY_API_URL and DIFY_API_KEY.",
-      });
-    }
+app.post(
+  "/api/chat",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      if (!DIFY_API_URL || !DIFY_API_KEY) {
+        return res.status(500).json({
+          error:
+            "Dify is not configured. Please set DIFY_API_URL and DIFY_API_KEY.",
+        });
+      }
 
-    const { message, conversation_id } = req.body;
-    const userId = req.user?.user_id;
+      const { message, conversation_id } = req.body;
+      const userId = req.user?.user_id;
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
 
-    const response = await axios.post(
-      `${DIFY_API_URL}/chat-messages`,
-      {
-        inputs: {},
-        query: message,
-        response_mode: "streaming",
-        user: userId || "default_user",
-        conversation_id: conversation_id || "",
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${DIFY_API_KEY}`,
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
+      const response = await axios.post(
+        `${DIFY_API_URL}/chat-messages`,
+        {
+          inputs: {},
+          query: message,
+          response_mode: "streaming",
+          user: userId || "default_user",
+          conversation_id: conversation_id || "",
         },
-        responseType: "stream",
-        timeout: DIFY_CHAT_TIMEOUT_MS,
-        validateStatus: () => true,
-      },
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${DIFY_API_KEY}`,
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          responseType: "stream",
+          timeout: DIFY_CHAT_TIMEOUT_MS,
+          validateStatus: () => true,
+        },
+      );
 
-    if (response.status < 200 || response.status >= 300) {
-      let errorBody = "";
+      if (response.status < 200 || response.status >= 300) {
+        let errorBody = "";
 
-      response.data.on("data", (chunk: Buffer) => {
-        errorBody += chunk.toString("utf8");
+        response.data.on("data", (chunk: Buffer) => {
+          errorBody += chunk.toString("utf8");
+        });
+
+        response.data.on("end", () => {
+          res.status(response.status).json({
+            error: "Dify upstream error",
+            details: errorBody || "Empty upstream error response",
+          });
+        });
+
+        return;
+      }
+
+      response.data.pipe(res);
+      response.data.on("error", (streamError: unknown) => {
+        console.error("Dify stream error:", streamError);
+        if (!res.headersSent) {
+          res.status(502).json({
+            error: "Dify stream error",
+            details:
+              streamError instanceof Error
+                ? streamError.message
+                : "Unknown stream error",
+          });
+        } else {
+          res.end();
+        }
       });
 
       response.data.on("end", () => {
-        res.status(response.status).json({
-          error: "Dify upstream error",
-          details: errorBody || "Empty upstream error response",
-        });
-      });
-
-      return;
-    }
-
-    response.data.pipe(res);
-    response.data.on("error", (streamError: unknown) => {
-      console.error("Dify stream error:", streamError);
-      if (!res.headersSent) {
-        res.status(502).json({
-          error: "Dify stream error",
-          details:
-            streamError instanceof Error ? streamError.message : "Unknown stream error",
-        });
-      } else {
         res.end();
-      }
-    });
+      });
+    } catch (error) {
+      console.error("Dify logic error:", error);
+      if (axios.isAxiosError(error)) {
+        if (error.code === "ECONNABORTED") {
+          res.status(504).json({
+            error: "Dify upstream timeout",
+            details: `No response from Dify within ${DIFY_CHAT_TIMEOUT_MS}ms.`,
+          });
+          return;
+        }
 
-    response.data.on("end", () => {
-      res.end();
-    });
-  } catch (error) {
-    console.error("Dify logic error:", error);
-    if (axios.isAxiosError(error)) {
-      if (error.code === "ECONNABORTED") {
-        res.status(504).json({
-          error: "Dify upstream timeout",
-          details: `No response from Dify within ${DIFY_CHAT_TIMEOUT_MS}ms.`,
+        res.status(502).json({
+          error: "Dify request failed",
+          details: error.message,
         });
         return;
       }
 
-      res.status(502).json({
-        error: "Dify request failed",
-        details: error.message,
+      res.status(500).json({
+        error: "Dify logic error",
+        details:
+          error instanceof Error ? error.message : "Unknown backend error",
       });
-      return;
+      res.end();
     }
-
-    res.status(500).json({
-      error: "Dify logic error",
-      details: error instanceof Error ? error.message : "Unknown backend error",
-    });
-    res.end();
-  }
-});
+  },
+);
 
 const PORT = 3001;
 app.listen(PORT, () => {

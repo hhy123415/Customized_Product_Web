@@ -100,3 +100,31 @@ export interface EmailVerificationCodeRow {
   ip_address?: string | null;
   user_agent?: string | null;
 }
+
+export type ProductPageStatus = "draft" | "pending_review" | "approved" | "rejected";
+
+export interface ProductPageParameterInput {
+  id: string;
+  name: string;
+  type: "text" | "number" | "select";
+  required: boolean;
+  unit?: string | null;
+  default_value?: string | null;
+  options?: string[];
+}
+
+export interface ProductCustomizationPageRow {
+  page_id: string;
+  user_id: string;
+  product_name: string;
+  product_summary: string | null;
+  parameters: ProductPageParameterInput[];
+  status: ProductPageStatus;
+  review_comment: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  publisher_username?: string;
+  reviewer_username?: string | null;
+}

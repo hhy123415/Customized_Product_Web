@@ -10,6 +10,7 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const axios_1 = __importDefault(require("axios"));
+const crypto_1 = require("crypto");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const multer_1 = __importDefault(require("multer"));
@@ -120,6 +121,66 @@ app.use("/uploads", express_1.default.static(UPLOAD_DIR));
 const SECRET_KEY = process.env.JWT_SECRET || "";
 const MAX_BIO_LENGTH = 500;
 const MAX_WORK_DESCRIPTION_LENGTH = 200;
+const MAX_PRODUCT_NAME_LENGTH = 120;
+const MAX_PRODUCT_SUMMARY_LENGTH = 1000;
+const MAX_REVIEW_COMMENT_LENGTH = 500;
+const MAX_PARAMETER_COUNT = 20;
+const MAX_PARAMETER_NAME_LENGTH = 50;
+const MAX_PARAMETER_OPTION_COUNT = 20;
+const PRODUCT_PAGE_STATUS_VALUES = [
+    "draft",
+    "pending_review",
+    "approved",
+    "rejected",
+];
+const isEnterpriseUser = (req) => req.user?.role === "enterprise";
+const normalizeProductPageParameters = (input) => {
+    if (!Array.isArray(input)) {
+        throw new Error("parameters must be an array");
+    }
+    if (input.length > MAX_PARAMETER_COUNT) {
+        throw new Error(`parameters cannot exceed ${MAX_PARAMETER_COUNT}`);
+    }
+    return input.map((item, index) => {
+        if (!item || typeof item !== "object") {
+            throw new Error(`parameter ${index + 1} is invalid`);
+        }
+        const raw = item;
+        const name = String(raw.name || "").trim();
+        const type = String(raw.type || "").trim();
+        const required = Boolean(raw.required);
+        const unit = String(raw.unit || "").trim();
+        const defaultValue = String(raw.default_value || raw.defaultValue || "").trim();
+        const optionsInput = Array.isArray(raw.options) ? raw.options : [];
+        if (!name) {
+            throw new Error(`parameter ${index + 1} name is required`);
+        }
+        if (name.length > MAX_PARAMETER_NAME_LENGTH) {
+            throw new Error(`parameter ${index + 1} name is too long`);
+        }
+        if (!["text", "number", "select"].includes(type)) {
+            throw new Error(`parameter ${index + 1} type is invalid`);
+        }
+        const options = type === "select"
+            ? optionsInput
+                .map((option) => String(option || "").trim())
+                .filter(Boolean)
+                .slice(0, MAX_PARAMETER_OPTION_COUNT)
+            : [];
+        if (type === "select" && options.length === 0) {
+            throw new Error(`parameter ${index + 1} requires at least one option`);
+        }
+        return {
+            id: typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : (0, crypto_1.randomUUID)(),
+            name,
+            type: type,
+            required,
+            unit: unit || null,
+            default_value: defaultValue || null,
+            options,
+        };
+    });
+};
 app.get("/api/me", auth_1.authenticateToken, async (req, res) => {
     const userId = req.user?.user_id;
     if (!userId) {
@@ -174,6 +235,170 @@ app.get("/api/admin/users", auth_1.authenticateToken, auth_1.authenticateAdmin, 
             success: false,
             message: "Internal server error",
         });
+    }
+});
+app.get("/api/enterprise/product-pages", auth_1.authenticateToken, async (req, res) => {
+    if (!isEnterpriseUser(req)) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+    const userId = req.user?.user_id;
+    const rawStatus = req.query.status;
+    const status = typeof rawStatus === "string" && PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus)
+        ? rawStatus
+        : undefined;
+    if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    try {
+        const pages = await dataAccess_1.db.getProductCustomizationPagesByUserId(userId, status);
+        return res.json({ success: true, pages });
+    }
+    catch (err) {
+        console.error("get enterprise product pages error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+});
+app.get("/api/enterprise/product-pages/:pageId", auth_1.authenticateToken, async (req, res) => {
+    if (!isEnterpriseUser(req)) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+    const userId = req.user?.user_id;
+    const pageId = Array.isArray(req.params.pageId) ? req.params.pageId[0] : req.params.pageId;
+    if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    if (!pageId) {
+        return res.status(400).json({ success: false, message: "pageId is required" });
+    }
+    try {
+        const page = await dataAccess_1.db.getProductCustomizationPageById(pageId);
+        if (!page || page.user_id !== userId) {
+            return res.status(404).json({ success: false, message: "Page not found" });
+        }
+        return res.json({ success: true, page });
+    }
+    catch (err) {
+        console.error("get enterprise product page detail error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+});
+app.post("/api/enterprise/product-pages", auth_1.authenticateToken, async (req, res) => {
+    if (!isEnterpriseUser(req)) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+    const userId = req.user?.user_id;
+    const { page_id, product_name, product_summary, parameters } = req.body;
+    if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const productName = (product_name || "").trim();
+    const productSummary = (product_summary || "").trim();
+    if (!productName) {
+        return res.status(400).json({ success: false, message: "product_name is required" });
+    }
+    if (productName.length > MAX_PRODUCT_NAME_LENGTH) {
+        return res.status(400).json({ success: false, message: "product_name is too long" });
+    }
+    if (productSummary.length > MAX_PRODUCT_SUMMARY_LENGTH) {
+        return res.status(400).json({ success: false, message: "product_summary is too long" });
+    }
+    try {
+        const normalizedParameters = normalizeProductPageParameters(parameters || []);
+        const page = await dataAccess_1.db.saveProductCustomizationPage({
+            pageId: typeof page_id === "string" && page_id.trim() ? page_id.trim() : undefined,
+            userId,
+            productName,
+            productSummary: productSummary || null,
+            parameters: normalizedParameters,
+        });
+        return res.status(201).json({ success: true, page });
+    }
+    catch (err) {
+        console.error("save enterprise product page error:", err);
+        return res.status(400).json({
+            success: false,
+            message: err instanceof Error ? err.message : "Invalid request",
+        });
+    }
+});
+app.post("/api/enterprise/product-pages/:pageId/submit", auth_1.authenticateToken, async (req, res) => {
+    if (!isEnterpriseUser(req)) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+    const userId = req.user?.user_id;
+    const pageId = Array.isArray(req.params.pageId) ? req.params.pageId[0] : req.params.pageId;
+    if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    if (!pageId) {
+        return res.status(400).json({ success: false, message: "pageId is required" });
+    }
+    try {
+        const existingPage = await dataAccess_1.db.getProductCustomizationPageById(pageId);
+        if (!existingPage || existingPage.user_id !== userId) {
+            return res.status(404).json({ success: false, message: "Page not found" });
+        }
+        if (existingPage.parameters.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "At least one parameter is required before submit",
+            });
+        }
+        const page = await dataAccess_1.db.submitProductCustomizationPage(pageId, userId);
+        return res.json({ success: true, page });
+    }
+    catch (err) {
+        console.error("submit enterprise product page error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+});
+app.get("/api/admin/product-pages", auth_1.authenticateToken, auth_1.authenticateAdmin, async (req, res) => {
+    const rawStatus = req.query.status;
+    const status = typeof rawStatus === "string" && PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus)
+        ? rawStatus
+        : undefined;
+    try {
+        const pages = await dataAccess_1.db.getProductCustomizationPagesForAdmin(status);
+        return res.json({ success: true, pages });
+    }
+    catch (err) {
+        console.error("get admin product pages error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+});
+app.post("/api/admin/product-pages/:pageId/review", auth_1.authenticateToken, auth_1.authenticateAdmin, async (req, res) => {
+    const reviewerId = req.user?.user_id;
+    const pageId = Array.isArray(req.params.pageId) ? req.params.pageId[0] : req.params.pageId;
+    const { action, review_comment } = req.body;
+    if (!reviewerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    if (!pageId) {
+        return res.status(400).json({ success: false, message: "pageId is required" });
+    }
+    const nextStatus = action === "approve" ? "approved" : action === "reject" ? "rejected" : null;
+    if (!nextStatus) {
+        return res.status(400).json({ success: false, message: "action must be approve or reject" });
+    }
+    const reviewComment = (review_comment || "").trim();
+    if (reviewComment.length > MAX_REVIEW_COMMENT_LENGTH) {
+        return res.status(400).json({ success: false, message: "review_comment is too long" });
+    }
+    try {
+        const page = await dataAccess_1.db.reviewProductCustomizationPage({
+            pageId,
+            reviewerId,
+            status: nextStatus,
+            reviewComment: reviewComment || null,
+        });
+        if (!page) {
+            return res.status(404).json({ success: false, message: "Page not found" });
+        }
+        return res.json({ success: true, page });
+    }
+    catch (err) {
+        console.error("review product page error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error" });
     }
 });
 app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {

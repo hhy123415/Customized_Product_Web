@@ -74,6 +74,36 @@ CREATE INDEX idx_comments_post_id ON comments (post_id);
 CREATE INDEX idx_comments_user_id ON comments (user_id);
 CREATE INDEX idx_comments_created_at ON comments (created_at);
 
+CREATE TABLE product_customization_pages (
+  page_id TEXT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  product_name VARCHAR(120) NOT NULL,
+  product_summary TEXT,
+  parameters JSONB NOT NULL DEFAULT '[]'::jsonb,
+  status VARCHAR(20) NOT NULL DEFAULT 'draft',
+  review_comment TEXT,
+  reviewed_by BIGINT,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_product_customization_pages_user_id
+    FOREIGN KEY (user_id)
+    REFERENCES users(user_id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE,
+  CONSTRAINT fk_product_customization_pages_reviewed_by
+    FOREIGN KEY (reviewed_by)
+    REFERENCES users(user_id)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+  CONSTRAINT chk_product_customization_pages_status
+    CHECK (status IN ('draft', 'pending_review', 'approved', 'rejected'))
+);
+
+CREATE INDEX idx_product_customization_pages_user_id ON product_customization_pages (user_id);
+CREATE INDEX idx_product_customization_pages_status ON product_customization_pages (status);
+CREATE INDEX idx_product_customization_pages_updated_at ON product_customization_pages (updated_at DESC);
+
 CREATE OR REPLACE FUNCTION set_updated_at_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -129,6 +159,11 @@ CREATE TRIGGER update_comments_updated_at
 BEFORE UPDATE ON comments
 FOR EACH ROW
 EXECUTE FUNCTION set_comments_updated_at_timestamp();
+
+CREATE TRIGGER update_product_customization_pages_updated_at
+BEFORE UPDATE ON product_customization_pages
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at_timestamp();
 
 CREATE TRIGGER trg_update_reply_count_on_insert
 AFTER INSERT ON comments

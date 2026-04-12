@@ -38,9 +38,14 @@ function NavBar() {
           </li>
           <li>
             <Link
-              to="/product-customization"
+              to={
+                auth.isLoggedIn && auth.role === "enterprise"
+                  ? "/enterprise/product-pages/editor"
+                  : "/product-customization"
+              }
               className={
-                location.pathname === "/product-customization"
+                location.pathname === "/product-customization" ||
+                location.pathname === "/enterprise/product-pages/editor"
                   ? styles.active
                   : ""
               }
