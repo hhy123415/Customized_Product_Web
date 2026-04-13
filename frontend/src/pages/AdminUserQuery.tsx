@@ -11,7 +11,6 @@ const formatDate = (value: string) => {
 
 const roleTextMap: Record<AdminUser["role"], string> = {
   admin: "管理员",
-  enterprise: "企业用户",
   regular: "普通用户",
 };
 

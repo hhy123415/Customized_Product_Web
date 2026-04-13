@@ -1,3 +1,8 @@
+/**
+ * Express 后端主入口文件
+ * 功能模块：用户认证、邮箱验证、产品定制页面、台球杆订单、社区论坛、图片上传、AI聊天
+ */
+
 import express, { NextFunction, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import cors from "cors";
@@ -12,24 +17,32 @@ import multer from "multer";
 import nodemailer from "nodemailer";
 import { authenticateAdmin, authenticateToken } from "./auth";
 import { db } from "./dataAccess";
-import type { ProductPageParameterInput, ProductPageStatus } from "./Interface";
+import type { PoolCueOrderConfig, PoolCueOrderPriceLine } from "./Interface";
 
+// ==================== 环境配置 ====================
+
+/** 加载环境变量 */
 dotenv.config();
 
+/** Dify AI 聊天服务配置 */
 const DIFY_API_KEY = process.env.DIFY_API_KEY;
 const DIFY_API_URL = process.env.DIFY_API_URL;
 const DIFY_CHAT_TIMEOUT_MS = Number(process.env.DIFY_CHAT_TIMEOUT_MS || 45000);
+
+/** 企业用户和管理员注册邀请码 */
 const ENTERPRISE_REGISTER_CODE = process.env.ENTERPRISE_REGISTER_CODE || "6666";
 const ADMIN_REGISTER_CODE = process.env.ADMIN_REGISTER_CODE || "8888";
 
-// 邮件发送配置
+// ==================== 邮件服务配置 ====================
+
+/** SMTP 服务器配置 */
 const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || "";
 const EMAIL_FROM = process.env.EMAIL_FROM || SMTP_USER;
 
-// 验证码配置
+/** 验证码有效期（分钟）和发送频率限制 */
 const VERIFICATION_CODE_EXPIRY_MINUTES = parseInt(
   process.env.VERIFICATION_CODE_EXPIRY_MINUTES || "10",
   10,
@@ -39,12 +52,15 @@ const MAX_VERIFICATION_ATTEMPTS_PER_10_MINUTES = parseInt(
   10,
 );
 
-// 创建邮件传输器
+/**
+ * 创建邮件传输器
+ * @returns {nodemailer.Transporter} 邮件传输器实例
+ */
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: SMTP_HOST,
     port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
+    secure: SMTP_PORT === 465, // 465端口使用SSL，其他使用TLS
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
@@ -52,12 +68,20 @@ const createTransporter = () => {
   });
 };
 
-// 生成6位数字验证码
+/**
+ * 生成6位数字验证码
+ * @returns {string} 6位数字字符串
+ */
 const generateVerificationCode = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// 发送验证码邮件
+/**
+ * 发送验证码邮件
+ * @param {string} email - 目标邮箱地址
+ * @param {string} code - 验证码
+ * @returns {Promise<boolean>} 发送是否成功
+ */
 const sendVerificationEmail = async (
   email: string,
   code: string,
@@ -93,30 +117,41 @@ const sendVerificationEmail = async (
   }
 };
 
+// ==================== 数据库连接检查 ====================
+
+/** 初始化数据库连接 */
 db.checkConnection()
   .then(() => {
     console.log("数据库连接成功");
   })
   .catch((err) => console.error("数据库连接失败:", err));
 
-const app = express();
-app.set("trust proxy", 1);
-app.use(cookieParser());
+// ==================== Express 应用配置 ====================
 
+/** 创建 Express 应用实例 */
+const app = express();
+app.set("trust proxy", 1); // 信任代理，用于获取真实IP
+app.use(cookieParser()); // 启用Cookie解析
+
+/** CORS 跨域配置 - 仅允许本地开发环境 */
 const allowedOrigins = ["http://localhost:3000"];
 app.use(
   cors({
     origin: allowedOrigins,
-    credentials: true,
+    credentials: true, // 允许携带凭证（Cookie）
   }),
 );
-app.use(express.json());
+app.use(express.json()); // 解析 JSON 请求体
 
+// ==================== 文件上传配置 ====================
+
+/** 上传文件存储目录 */
 const UPLOAD_DIR = path.resolve(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
+/** 图片存储配置 */
 const imageStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
   filename: (_req, file, cb) => {
@@ -126,9 +161,10 @@ const imageStorage = multer.diskStorage({
   },
 });
 
+/** 图片上传中间件配置 */
 const uploadImage = multer({
   storage: imageStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 限制5MB
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
       cb(null, true);
@@ -138,91 +174,205 @@ const uploadImage = multer({
   },
 });
 
+/** 静态文件服务 - 提供上传的图片访问 */
 app.use("/uploads", express.static(UPLOAD_DIR));
 
+// ==================== 常量定义 ====================
+
+/** JWT 密钥 */
 const SECRET_KEY = process.env.JWT_SECRET || "";
-const MAX_BIO_LENGTH = 500;
-const MAX_WORK_DESCRIPTION_LENGTH = 200;
-const MAX_PRODUCT_NAME_LENGTH = 120;
-const MAX_PRODUCT_SUMMARY_LENGTH = 1000;
-const MAX_REVIEW_COMMENT_LENGTH = 500;
-const MAX_PARAMETER_COUNT = 20;
-const MAX_PARAMETER_NAME_LENGTH = 50;
-const MAX_PARAMETER_OPTION_COUNT = 20;
-const PRODUCT_PAGE_STATUS_VALUES: ProductPageStatus[] = [
-  "draft",
-  "pending_review",
-  "approved",
-  "rejected",
-];
 
-const isEnterpriseUser = (req: Request) => req.user?.role === "enterprise";
+/** 各字段长度限制常量 */
+const MAX_BIO_LENGTH = 500; // 个人简介最大长度
+const MAX_WORK_DESCRIPTION_LENGTH = 200; // 作品描述最大长度
+const MAX_PRODUCT_NAME_LENGTH = 120; // 产品名称最大长度
+const MAX_PRODUCT_SUMMARY_LENGTH = 1000; // 产品摘要最大长度
+const MAX_REVIEW_COMMENT_LENGTH = 500; // 审核评论最大长度
+const MAX_ORDER_CONTACT_NAME_LENGTH = 80; // 订单联系人姓名最大长度
+const MAX_ORDER_CONTACT_PHONE_LENGTH = 30; // 订单联系电话最大长度
+const MAX_ORDER_SHIPPING_ADDRESS_LENGTH = 500; // 订单配送地址最大长度
+const MAX_ORDER_NOTE_LENGTH = 500; // 订单备注最大长度
+const MAX_PARAMETER_COUNT = 20; // 产品参数最大数量
+const MAX_PARAMETER_NAME_LENGTH = 50; // 参数名称最大长度
+const MAX_PARAMETER_OPTION_COUNT = 20; // 下拉选项最大数量
 
-const normalizeProductPageParameters = (
-  input: unknown,
-): ProductPageParameterInput[] => {
-  if (!Array.isArray(input)) {
-    throw new Error("parameters must be an array");
+// ==================== 辅助函数 ====================
+
+/**
+ * 规范化台球杆配置参数并验证
+ * @param {unknown} input - 原始配置数据
+ * @returns {PoolCueOrderConfig} 验证后的配置对象
+ * @throws {Error} 当配置无效时抛出错误
+ */
+const normalizePoolCueConfig = (input: unknown): PoolCueOrderConfig => {
+  if (!input || typeof input !== "object") {
+    throw new Error("config is required");
   }
 
-  if (input.length > MAX_PARAMETER_COUNT) {
-    throw new Error(`parameters cannot exceed ${MAX_PARAMETER_COUNT}`);
+  const raw = input as Record<string, unknown>;
+  const lengthCm = Number(raw.lengthCm);
+  const weightOz = Number(raw.weightOz);
+  const tipDiameterMm = Number(raw.tipDiameterMm);
+  const jointType = String(raw.jointType || "").trim();
+  const wrapType = String(raw.wrapType || "").trim();
+  const finishStyle = String(raw.finishStyle || "").trim();
+  const caseOption = String(raw.caseOption || "").trim();
+  const includeLaserEngraving = Boolean(raw.includeLaserEngraving);
+
+  // 验证长度范围：142-150cm
+  if (!Number.isFinite(lengthCm) || lengthCm < 142 || lengthCm > 150) {
+    throw new Error("lengthCm is invalid");
   }
 
-  return input.map((item, index) => {
-    if (!item || typeof item !== "object") {
-      throw new Error(`parameter ${index + 1} is invalid`);
-    }
+  // 验证重量范围：17-21oz，且必须为0.5的倍数
+  if (
+    !Number.isFinite(weightOz) ||
+    weightOz < 17 ||
+    weightOz > 21 ||
+    Math.round(weightOz * 2) !== weightOz * 2
+  ) {
+    throw new Error("weightOz is invalid");
+  }
 
-    const raw = item as Record<string, unknown>;
-    const name = String(raw.name || "").trim();
-    const type = String(raw.type || "").trim();
-    const required = Boolean(raw.required);
-    const unit = String(raw.unit || "").trim();
-    const defaultValue = String(
-      raw.default_value || raw.defaultValue || "",
-    ).trim();
-    const optionsInput = Array.isArray(raw.options) ? raw.options : [];
+  // 验证杆头直径：只允许特定规格
+  if (![10, 10.5, 11, 11.5, 12].includes(tipDiameterMm)) {
+    throw new Error("tipDiameterMm is invalid");
+  }
 
-    if (!name) {
-      throw new Error(`parameter ${index + 1} name is required`);
-    }
+  // 验证接牙类型
+  if (!["stainless-steel", "titanium"].includes(jointType)) {
+    throw new Error("jointType is invalid");
+  }
 
-    if (name.length > MAX_PARAMETER_NAME_LENGTH) {
-      throw new Error(`parameter ${index + 1} name is too long`);
-    }
+  // 验证握把类型
+  if (!["carbon-grip", "genuine-leather", "none"].includes(wrapType)) {
+    throw new Error("wrapType is invalid");
+  }
 
-    if (!["text", "number", "select"].includes(type)) {
-      throw new Error(`parameter ${index + 1} type is invalid`);
-    }
+  // 验证涂装样式
+  if (
+    ![
+      "matte-carbon",
+      "gloss-carbon",
+      "stealth-black",
+      "ice-silver",
+      "ocean-blue",
+      "crimson-red",
+    ].includes(finishStyle)
+  ) {
+    throw new Error("finishStyle is invalid");
+  }
 
-    const options =
-      type === "select"
-        ? optionsInput
-            .map((option) => String(option || "").trim())
-            .filter(Boolean)
-            .slice(0, MAX_PARAMETER_OPTION_COUNT)
-        : [];
+  // 验证球杆盒选项
+  if (!["none", "basic", "pro"].includes(caseOption)) {
+    throw new Error("caseOption is invalid");
+  }
 
-    if (type === "select" && options.length === 0) {
-      throw new Error(`parameter ${index + 1} requires at least one option`);
-    }
-
-    return {
-      id:
-        typeof raw.id === "string" && raw.id.trim()
-          ? raw.id.trim()
-          : randomUUID(),
-      name,
-      type: type as ProductPageParameterInput["type"],
-      required,
-      unit: unit || null,
-      default_value: defaultValue || null,
-      options,
-    };
-  });
+  return {
+    lengthCm,
+    weightOz,
+    tipDiameterMm,
+    jointType: jointType as PoolCueOrderConfig["jointType"],
+    wrapType: wrapType as PoolCueOrderConfig["wrapType"],
+    finishStyle: finishStyle as PoolCueOrderConfig["finishStyle"],
+    caseOption: caseOption as PoolCueOrderConfig["caseOption"],
+    includeLaserEngraving,
+  };
 };
 
+/**
+ * 计算台球杆定制价格
+ * @param {PoolCueOrderConfig} config - 台球杆配置
+ * @returns {Object} 包含价格明细和总价的对象
+ */
+const calculatePoolCuePrice = (
+  config: PoolCueOrderConfig,
+): { lines: PoolCueOrderPriceLine[]; total: number } => {
+  const lines: PoolCueOrderPriceLine[] = [
+    { label: "碳纤维基础杆体", amount: 1880 },
+    {
+      label: `长度调整（${config.lengthCm}cm）`,
+      amount: (config.lengthCm - 147) * 26,
+    },
+    {
+      label: `重量调整（${config.weightOz}oz）`,
+      amount: Math.round((config.weightOz - 19) * 80),
+    },
+    {
+      label: `接牙类型：${config.jointType === "titanium" ? "钛合金" : "不锈钢"}`,
+      amount: config.jointType === "titanium" ? 320 : 180,
+    },
+    {
+      label:
+        config.wrapType === "genuine-leather"
+          ? "握把：真皮"
+          : config.wrapType === "none"
+            ? "握把：无缠把"
+            : "握把：碳纤维防滑握把",
+      amount:
+        config.wrapType === "genuine-leather"
+          ? 280
+          : config.wrapType === "none"
+            ? 0
+            : 160,
+    },
+    {
+      label:
+        config.finishStyle === "gloss-carbon"
+          ? "涂装：高亮碳纹"
+          : config.finishStyle === "stealth-black"
+            ? "涂装：隐形黑"
+            : config.finishStyle === "ice-silver"
+              ? "涂装：冰川银"
+              : config.finishStyle === "ocean-blue"
+                ? "涂装：海洋蓝"
+                : config.finishStyle === "crimson-red"
+                  ? "涂装：深红"
+                  : "涂装：磨砂碳纹",
+      amount:
+        config.finishStyle === "matte-carbon"
+          ? 0
+          : config.finishStyle === "ice-silver" ||
+              config.finishStyle === "ocean-blue"
+            ? 280
+            : 260,
+    },
+    {
+      label:
+        config.caseOption === "none"
+          ? "球杆盒：不选择"
+          : config.caseOption === "pro"
+            ? "球杆盒：专业硬壳"
+            : "球杆盒：基础软包",
+      amount:
+        config.caseOption === "none"
+          ? 0
+          : config.caseOption === "pro"
+            ? 460
+            : 180,
+    },
+  ];
+
+  // 激光刻字额外收费
+  if (config.includeLaserEngraving) {
+    lines.push({ label: "激光刻字", amount: 160 });
+  }
+
+  return {
+    lines,
+    total: lines.reduce((sum, item) => sum + item.amount, 0),
+  };
+};
+
+// ==================== API 路由 ====================
+
+// -------------------- 用户认证相关 --------------------
+
+/**
+ * GET /api/me
+ * 获取当前登录用户信息
+ * 需要认证
+ */
 app.get("/api/me", authenticateToken, async (req: Request, res: Response) => {
   const userId = req.user?.user_id;
 
@@ -261,6 +411,11 @@ app.get("/api/me", authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/admin/users
+ * 管理员获取用户列表（支持搜索）
+ * 需要管理员权限
+ */
 app.get(
   "/api/admin/users",
   authenticateToken,
@@ -292,141 +447,106 @@ app.get(
   },
 );
 
-app.get(
-  "/api/enterprise/product-pages",
-  authenticateToken,
-  async (req: Request, res: Response) => {
-    if (!isEnterpriseUser(req)) {
-      return res.status(403).json({ success: false, message: "Forbidden" });
-    }
+// -------------------- 订单管理 --------------------
 
-    const userId = req.user?.user_id;
-    const rawStatus = req.query.status;
-    const status =
-      typeof rawStatus === "string" &&
-      PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus as ProductPageStatus)
-        ? (rawStatus as ProductPageStatus)
-        : undefined;
-
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    try {
-      const pages = await db.getProductCustomizationPagesByUserId(
-        userId,
-        status,
-      );
-      return res.json({ success: true, pages });
-    } catch (err) {
-      console.error("get enterprise product pages error:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Internal server error" });
-    }
-  },
-);
-
-app.get(
-  "/api/enterprise/product-pages/:pageId",
-  authenticateToken,
-  async (req: Request, res: Response) => {
-    if (!isEnterpriseUser(req)) {
-      return res.status(403).json({ success: false, message: "Forbidden" });
-    }
-
-    const userId = req.user?.user_id;
-    const pageId = Array.isArray(req.params.pageId)
-      ? req.params.pageId[0]
-      : req.params.pageId;
-
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    if (!pageId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "pageId is required" });
-    }
-
-    try {
-      const page = await db.getProductCustomizationPageById(pageId);
-      if (!page || page.user_id !== userId) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Page not found" });
-      }
-
-      return res.json({ success: true, page });
-    } catch (err) {
-      console.error("get enterprise product page detail error:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Internal server error" });
-    }
-  },
-);
-
+/**
+ * POST /api/orders/pool-cue
+ * 创建台球杆定制订单
+ */
 app.post(
-  "/api/enterprise/product-pages",
+  "/api/orders/pool-cue",
   authenticateToken,
   async (req: Request, res: Response) => {
-    if (!isEnterpriseUser(req)) {
-      return res.status(403).json({ success: false, message: "Forbidden" });
-    }
-
     const userId = req.user?.user_id;
-    const { page_id, product_name, product_summary, parameters } = req.body as {
-      page_id?: string;
-      product_name?: string;
-      product_summary?: string;
-      parameters?: unknown;
+    const {
+      config,
+      contact_name,
+      contact_phone,
+      shipping_address,
+      order_note,
+    } = req.body as {
+      config?: unknown;
+      contact_name?: string;
+      contact_phone?: string;
+      shipping_address?: string;
+      order_note?: string | null;
     };
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const productName = (product_name || "").trim();
-    const productSummary = (product_summary || "").trim();
+    const contactName = String(contact_name || "").trim();
+    const contactPhone = String(contact_phone || "").trim();
+    const shippingAddress = String(shipping_address || "").trim();
+    const orderNote = String(order_note || "").trim();
 
-    if (!productName) {
+    // 验证必填字段
+    if (!contactName) {
       return res
         .status(400)
-        .json({ success: false, message: "product_name is required" });
+        .json({ success: false, message: "contact_name is required" });
     }
 
-    if (productName.length > MAX_PRODUCT_NAME_LENGTH) {
+    if (!contactPhone) {
       return res
         .status(400)
-        .json({ success: false, message: "product_name is too long" });
+        .json({ success: false, message: "contact_phone is required" });
     }
 
-    if (productSummary.length > MAX_PRODUCT_SUMMARY_LENGTH) {
+    if (!shippingAddress) {
       return res
         .status(400)
-        .json({ success: false, message: "product_summary is too long" });
+        .json({ success: false, message: "shipping_address is required" });
+    }
+
+    // 验证字段长度
+    if (contactName.length > MAX_ORDER_CONTACT_NAME_LENGTH) {
+      return res
+        .status(400)
+        .json({ success: false, message: "contact_name is too long" });
+    }
+
+    if (contactPhone.length > MAX_ORDER_CONTACT_PHONE_LENGTH) {
+      return res
+        .status(400)
+        .json({ success: false, message: "contact_phone is too long" });
+    }
+
+    if (shippingAddress.length > MAX_ORDER_SHIPPING_ADDRESS_LENGTH) {
+      return res
+        .status(400)
+        .json({ success: false, message: "shipping_address is too long" });
+    }
+
+    if (orderNote.length > MAX_ORDER_NOTE_LENGTH) {
+      return res
+        .status(400)
+        .json({ success: false, message: "order_note is too long" });
     }
 
     try {
-      const normalizedParameters = normalizeProductPageParameters(
-        parameters || [],
-      );
-      const page = await db.saveProductCustomizationPage({
-        pageId:
-          typeof page_id === "string" && page_id.trim()
-            ? page_id.trim()
-            : undefined,
+      const normalizedConfig = normalizePoolCueConfig(config);
+      const pricing = calculatePoolCuePrice(normalizedConfig);
+      const order = await db.createPoolCueOrder({
         userId,
-        productName,
-        productSummary: productSummary || null,
-        parameters: normalizedParameters,
+        productName: "碳纤维台球杆",
+        configuration: normalizedConfig,
+        pricingLines: pricing.lines,
+        totalPrice: pricing.total,
+        contactName,
+        contactPhone,
+        shippingAddress,
+        orderNote: orderNote || null,
       });
 
-      return res.status(201).json({ success: true, page });
+      return res.status(201).json({
+        success: true,
+        message: "Order created",
+        order,
+      });
     } catch (err) {
-      console.error("save enterprise product page error:", err);
+      console.error("create pool cue order error:", err);
       return res.status(400).json({
         success: false,
         message: err instanceof Error ? err.message : "Invalid request",
@@ -435,187 +555,12 @@ app.post(
   },
 );
 
-app.post(
-  "/api/enterprise/product-pages/:pageId/submit",
-  authenticateToken,
-  async (req: Request, res: Response) => {
-    if (!isEnterpriseUser(req)) {
-      return res.status(403).json({ success: false, message: "Forbidden" });
-    }
-
-    const userId = req.user?.user_id;
-    const pageId = Array.isArray(req.params.pageId)
-      ? req.params.pageId[0]
-      : req.params.pageId;
-
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    if (!pageId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "pageId is required" });
-    }
-
-    try {
-      const existingPage = await db.getProductCustomizationPageById(pageId);
-      if (!existingPage || existingPage.user_id !== userId) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Page not found" });
-      }
-
-      if (existingPage.parameters.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "At least one parameter is required before submit",
-        });
-      }
-
-      const page = await db.submitProductCustomizationPage(pageId, userId);
-      return res.json({ success: true, page });
-    } catch (err) {
-      console.error("submit enterprise product page error:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Internal server error" });
-    }
-  },
-);
-
-app.get(
-  "/api/admin/product-pages",
-  authenticateToken,
-  authenticateAdmin,
-  async (req: Request, res: Response) => {
-    const rawStatus = req.query.status;
-    const status =
-      typeof rawStatus === "string" &&
-      PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus as ProductPageStatus)
-        ? (rawStatus as ProductPageStatus)
-        : undefined;
-
-    try {
-      const pages = await db.getProductCustomizationPagesForAdmin(status);
-      return res.json({ success: true, pages });
-    } catch (err) {
-      console.error("get admin product pages error:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Internal server error" });
-    }
-  },
-);
-
-app.post(
-  "/api/admin/product-pages/:pageId/review",
-  authenticateToken,
-  authenticateAdmin,
-  async (req: Request, res: Response) => {
-    const reviewerId = req.user?.user_id;
-    const pageId = Array.isArray(req.params.pageId)
-      ? req.params.pageId[0]
-      : req.params.pageId;
-    const { action, review_comment } = req.body as {
-      action?: string;
-      review_comment?: string;
-    };
-
-    if (!reviewerId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    if (!pageId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "pageId is required" });
-    }
-
-    const nextStatus =
-      action === "approve"
-        ? "approved"
-        : action === "reject"
-          ? "rejected"
-          : null;
-    if (!nextStatus) {
-      return res
-        .status(400)
-        .json({ success: false, message: "action must be approve or reject" });
-    }
-
-    const reviewComment = (review_comment || "").trim();
-    if (reviewComment.length > MAX_REVIEW_COMMENT_LENGTH) {
-      return res
-        .status(400)
-        .json({ success: false, message: "review_comment is too long" });
-    }
-
-    try {
-      const page = await db.reviewProductCustomizationPage({
-        pageId,
-        reviewerId,
-        status: nextStatus,
-        reviewComment: reviewComment || null,
-      });
-
-      if (!page) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Page not found" });
-      }
-
-      return res.json({ success: true, page });
-    } catch (err) {
-      console.error("review product page error:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Internal server error" });
-    }
-  },
-);
+// -------------------- 用户个人信息管理 --------------------
 
 /**
- * 获取所有已审核通过的产品定制页面 (公开接口)
- * 路径: GET /api/public/product-customization-pages
+ * GET /api/my_info
+ * 获取当前用户完整个人信息
  */
-app.get(
-  "/api/public/product-customization-pages",
-  authenticateToken,
-  async (req: Request, res: Response) => {
-    try {
-      const pages = await db.getPublicProductCustomizationPages();
-      return res.json({ success: true, pages });
-    } catch (err) {
-      console.error("fetch public product pages error:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Internal server error" });
-    }
-  },
-);
-
-app.get(
-  "/api/public/product-customization-pages/:pageId",
-  authenticateToken,
-  async (req: Request, res: Response) => {
-    const pageId = Array.isArray(req.params.pageId)
-      ? req.params.pageId[0]
-      : req.params.pageId;
-    try {
-      const page = await db.getProductCustomizationPageById(pageId);
-      if (!page || page.status !== "approved") {
-        return res
-          .status(404)
-          .json({ success: false, message: "Page not found or not approved" });
-      }
-      return res.json({ success: true, page });
-    } catch (err) {
-      return res.status(500).json({ success: false });
-    }
-  },
-);
-
 app.get(
   "/api/my_info",
   authenticateToken,
@@ -653,6 +598,10 @@ app.get(
   },
 );
 
+/**
+ * GET /api/users/:userId/profile
+ * 获取指定用户的公开资料（包含作品列表）
+ */
 app.get(
   "/api/users/:userId/profile",
   authenticateToken,
@@ -703,6 +652,10 @@ app.get(
   },
 );
 
+/**
+ * PUT /api/my_info/avatar
+ * 更新用户头像
+ */
 app.put(
   "/api/my_info/avatar",
   authenticateToken,
@@ -724,6 +677,7 @@ app.put(
       });
     }
 
+    // 验证图片路径必须在 uploads 目录下
     if (typeof img_path === "string" && !img_path.startsWith("/uploads/")) {
       return res.status(400).json({
         success: false,
@@ -764,6 +718,10 @@ app.put(
   },
 );
 
+/**
+ * PUT /api/my_info/profile
+ * 更新用户个人简介
+ */
 app.put(
   "/api/my_info/profile",
   authenticateToken,
@@ -824,6 +782,12 @@ app.put(
   },
 );
 
+// -------------------- 用户作品管理 --------------------
+
+/**
+ * POST /api/my_info/works
+ * 创建用户作品
+ */
 app.post(
   "/api/my_info/works",
   authenticateToken,
@@ -896,6 +860,10 @@ app.post(
   },
 );
 
+/**
+ * DELETE /api/my_info/works/:workId
+ * 删除用户作品
+ */
 app.delete(
   "/api/my_info/works/:workId",
   authenticateToken,
@@ -941,7 +909,12 @@ app.delete(
   },
 );
 
-// 发送邮箱验证码
+// -------------------- 邮箱验证码 --------------------
+
+/**
+ * POST /api/send-verification-code
+ * 发送邮箱验证码（注册用）
+ */
 app.post("/api/send-verification-code", async (req: Request, res: Response) => {
   const { email } = req.body;
   const ipAddress =
@@ -1025,7 +998,10 @@ app.post("/api/send-verification-code", async (req: Request, res: Response) => {
   }
 });
 
-// 验证邮箱验证码
+/**
+ * POST /api/verify-email-code
+ * 验证邮箱验证码
+ */
 app.post("/api/verify-email-code", async (req: Request, res: Response) => {
   const { email, code } = req.body;
 
@@ -1063,6 +1039,13 @@ app.post("/api/verify-email-code", async (req: Request, res: Response) => {
   }
 });
 
+// -------------------- 认证相关 --------------------
+
+/**
+ * POST /api/register
+ * 用户注册
+ * 支持普通用户、管理员（需邀请码）
+ */
 app.post("/api/register", async (req: Request, res: Response) => {
   const { username, password, email, registerCode, role, verificationCode } =
     req.body;
@@ -1114,13 +1097,7 @@ app.post("/api/register", async (req: Request, res: Response) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    if (role === "enterprise" && registerCode !== ENTERPRISE_REGISTER_CODE) {
-      return res.status(403).json({
-        success: false,
-        message: "企业注册码错误",
-      });
-    }
-
+    // 验证管理员注册码
     if (role === "admin" && registerCode !== ADMIN_REGISTER_CODE) {
       return res.status(403).json({
         success: false,
@@ -1151,6 +1128,11 @@ app.post("/api/register", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/login
+ * 用户登录
+ * 成功后在 Cookie 中设置 JWT Token
+ */
 app.post("/api/login", async (req: Request, res: Response) => {
   const { username, password } = req.body;
 
@@ -1172,6 +1154,7 @@ app.post("/api/login", async (req: Request, res: Response) => {
       });
     }
 
+    // 生成 JWT Token
     const token = jwt.sign(
       {
         user_id: user.user_id,
@@ -1182,11 +1165,12 @@ app.post("/api/login", async (req: Request, res: Response) => {
       { expiresIn: "24h" },
     );
 
+    // 设置 Cookie
     res.cookie("token", token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true, // 防止XSS攻击
+      secure: false, // 生产环境应设为true（HTTPS）
+      sameSite: "lax", // CSRF防护
+      maxAge: 24 * 60 * 60 * 1000, // 24小时
       path: "/",
     });
 
@@ -1207,11 +1191,20 @@ app.post("/api/login", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/logout
+ * 用户退出登录
+ * 清除 Cookie 中的 Token
+ */
 app.post("/api/logout", (req: Request, res: Response) => {
   res.clearCookie("token");
   res.json({ success: true, message: "退出成功" });
 });
 
+/**
+ * POST /api/forget1
+ * 密码找回第一步：验证用户名和邮箱
+ */
 app.post("/api/forget1", async (req: Request, res: Response) => {
   const { username, email } = req.body;
 
@@ -1238,6 +1231,10 @@ app.post("/api/forget1", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/forget2
+ * 密码找回第二步：重置密码
+ */
 app.post("/api/forget2", async (req: Request, res: Response) => {
   const { username, newPassword } = req.body;
 
@@ -1274,6 +1271,12 @@ app.post("/api/forget2", async (req: Request, res: Response) => {
   }
 });
 
+// -------------------- 社区论坛 --------------------
+
+/**
+ * GET /api/posts
+ * 获取帖子列表（包含作者信息）
+ */
 app.get(
   "/api/posts",
   authenticateToken,
@@ -1295,6 +1298,10 @@ app.get(
   },
 );
 
+/**
+ * POST /api/posts
+ * 创建新帖子
+ */
 app.post(
   "/api/posts",
   authenticateToken,
@@ -1351,6 +1358,10 @@ app.post(
   },
 );
 
+/**
+ * GET /api/posts/:postId
+ * 获取帖子详情（包含评论列表）
+ */
 app.get(
   "/api/posts/:postId",
   authenticateToken,
@@ -1392,6 +1403,10 @@ app.get(
   },
 );
 
+/**
+ * POST /api/posts/:postId/comments
+ * 创建帖子评论
+ */
 app.post(
   "/api/posts/:postId/comments",
   authenticateToken,
@@ -1453,6 +1468,13 @@ app.post(
   },
 );
 
+// -------------------- 文件上传 --------------------
+
+/**
+ * POST /api/images/upload
+ * 上传图片文件
+ * 限制：仅图片格式，最大5MB
+ */
 app.post(
   "/api/images/upload",
   authenticateToken,
@@ -1481,6 +1503,12 @@ app.post(
   },
 );
 
+// -------------------- 错误处理 --------------------
+
+/**
+ * 全局错误处理中间件
+ * 处理 Multer 上传错误和其他错误
+ */
 app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
   if (err instanceof multer.MulterError) {
     return res.status(400).json({
@@ -1502,6 +1530,13 @@ app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
   next(err);
 });
 
+// -------------------- AI 聊天 --------------------
+
+/**
+ * POST /api/chat
+ * 与 Dify AI 进行流式对话
+ * 使用 Server-Sent Events (SSE) 返回流式响应
+ */
 app.post(
   "/api/chat",
   authenticateToken,
@@ -1517,6 +1552,7 @@ app.post(
       const { message, conversation_id } = req.body;
       const userId = req.user?.user_id;
 
+      // 设置 SSE 响应头
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
@@ -1559,6 +1595,7 @@ app.post(
         return;
       }
 
+      // 将 Dify 的流式响应转发给客户端
       response.data.pipe(res);
       response.data.on("error", (streamError: unknown) => {
         console.error("Dify stream error:", streamError);
@@ -1606,6 +1643,9 @@ app.post(
   },
 );
 
+// ==================== 服务器启动 ====================
+
+/** 服务器监听端口 */
 const PORT = 3001;
 app.listen(PORT, () => {
   console.log(`服务器运行在 http://localhost:${PORT}`);

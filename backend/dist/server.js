@@ -79,8 +79,7 @@ const sendVerificationEmail = async (email, code) => {
         return false;
     }
 };
-dataAccess_1.db
-    .checkConnection()
+dataAccess_1.db.checkConnection()
     .then(() => {
     console.log("数据库连接成功");
 })
@@ -124,6 +123,10 @@ const MAX_WORK_DESCRIPTION_LENGTH = 200;
 const MAX_PRODUCT_NAME_LENGTH = 120;
 const MAX_PRODUCT_SUMMARY_LENGTH = 1000;
 const MAX_REVIEW_COMMENT_LENGTH = 500;
+const MAX_ORDER_CONTACT_NAME_LENGTH = 80;
+const MAX_ORDER_CONTACT_PHONE_LENGTH = 30;
+const MAX_ORDER_SHIPPING_ADDRESS_LENGTH = 500;
+const MAX_ORDER_NOTE_LENGTH = 500;
 const MAX_PARAMETER_COUNT = 20;
 const MAX_PARAMETER_NAME_LENGTH = 50;
 const MAX_PARAMETER_OPTION_COUNT = 20;
@@ -134,6 +137,113 @@ const PRODUCT_PAGE_STATUS_VALUES = [
     "rejected",
 ];
 const isEnterpriseUser = (req) => req.user?.role === "enterprise";
+const normalizePoolCueConfig = (input) => {
+    if (!input || typeof input !== "object") {
+        throw new Error("config is required");
+    }
+    const raw = input;
+    const lengthCm = Number(raw.lengthCm);
+    const weightOz = Number(raw.weightOz);
+    const tipDiameterMm = Number(raw.tipDiameterMm);
+    const jointType = String(raw.jointType || "").trim();
+    const wrapType = String(raw.wrapType || "").trim();
+    const finishStyle = String(raw.finishStyle || "").trim();
+    const caseOption = String(raw.caseOption || "").trim();
+    const includeLaserEngraving = Boolean(raw.includeLaserEngraving);
+    if (!Number.isFinite(lengthCm) || lengthCm < 142 || lengthCm > 150) {
+        throw new Error("lengthCm is invalid");
+    }
+    if (!Number.isFinite(weightOz) ||
+        weightOz < 17 ||
+        weightOz > 21 ||
+        Math.round(weightOz * 2) !== weightOz * 2) {
+        throw new Error("weightOz is invalid");
+    }
+    if (![10, 10.5, 11, 11.5, 12].includes(tipDiameterMm)) {
+        throw new Error("tipDiameterMm is invalid");
+    }
+    if (!["stainless-steel", "titanium"].includes(jointType)) {
+        throw new Error("jointType is invalid");
+    }
+    if (!["carbon-grip", "genuine-leather", "none"].includes(wrapType)) {
+        throw new Error("wrapType is invalid");
+    }
+    if (![
+        "matte-carbon",
+        "gloss-carbon",
+        "stealth-black",
+        "ice-silver",
+        "ocean-blue",
+        "crimson-red",
+    ].includes(finishStyle)) {
+        throw new Error("finishStyle is invalid");
+    }
+    if (!["none", "basic", "pro"].includes(caseOption)) {
+        throw new Error("caseOption is invalid");
+    }
+    return {
+        lengthCm,
+        weightOz,
+        tipDiameterMm,
+        jointType: jointType,
+        wrapType: wrapType,
+        finishStyle: finishStyle,
+        caseOption: caseOption,
+        includeLaserEngraving,
+    };
+};
+const calculatePoolCuePrice = (config) => {
+    const lines = [
+        { label: "碳纤维基础杆体", amount: 1880 },
+        { label: `长度调整（${config.lengthCm}cm）`, amount: (config.lengthCm - 147) * 26 },
+        { label: `重量调整（${config.weightOz}oz）`, amount: Math.round((config.weightOz - 19) * 80) },
+        {
+            label: `接牙类型：${config.jointType === "titanium" ? "钛合金" : "不锈钢"}`,
+            amount: config.jointType === "titanium" ? 320 : 180,
+        },
+        {
+            label: config.wrapType === "genuine-leather"
+                ? "握把：真皮"
+                : config.wrapType === "none"
+                    ? "握把：无缠把"
+                    : "握把：碳纤维防滑握把",
+            amount: config.wrapType === "genuine-leather" ? 280 : config.wrapType === "none" ? 0 : 160,
+        },
+        {
+            label: config.finishStyle === "gloss-carbon"
+                ? "涂装：高亮碳纹"
+                : config.finishStyle === "stealth-black"
+                    ? "涂装：隐形黑"
+                    : config.finishStyle === "ice-silver"
+                        ? "涂装：冰川银"
+                        : config.finishStyle === "ocean-blue"
+                            ? "涂装：海洋蓝"
+                            : config.finishStyle === "crimson-red"
+                                ? "涂装：深红"
+                                : "涂装：磨砂碳纹",
+            amount: config.finishStyle === "matte-carbon"
+                ? 0
+                : config.finishStyle === "ice-silver" || config.finishStyle === "ocean-blue"
+                    ? 280
+                    : 260,
+        },
+        {
+            label: config.caseOption === "none"
+                ? "球杆盒：不选择"
+                : config.caseOption === "pro"
+                    ? "球杆盒：专业硬壳"
+                    : "球杆盒：基础软包",
+            amount: config.caseOption === "none" ? 0 : config.caseOption === "pro" ? 460 : 180,
+        },
+    ];
+    if (config.includeLaserEngraving) {
+        lines.push({ label: "激光刻字", amount: 160 });
+    }
+    return {
+        lines,
+        total: lines.reduce((sum, item) => sum + item.amount, 0),
+    };
+};
 const normalizeProductPageParameters = (input) => {
     if (!Array.isArray(input)) {
         throw new Error("parameters must be an array");
@@ -171,7 +281,9 @@ const normalizeProductPageParameters = (input) => {
             throw new Error(`parameter ${index + 1} requires at least one option`);
         }
         return {
-            id: typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : (0, crypto_1.randomUUID)(),
+            id: typeof raw.id === "string" && raw.id.trim()
+                ? raw.id.trim()
+                : (0, crypto_1.randomUUID)(),
             name,
             type: type,
             required,
@@ -220,7 +332,9 @@ app.get("/api/admin/users", auth_1.authenticateToken, auth_1.authenticateAdmin, 
     const keyword = typeof rawKeyword === "string"
         ? rawKeyword.trim().slice(0, 100)
         : Array.isArray(rawKeyword)
-            ? String(rawKeyword[0] ?? "").trim().slice(0, 100)
+            ? String(rawKeyword[0] ?? "")
+                .trim()
+                .slice(0, 100)
             : "";
     try {
         const users = await dataAccess_1.db.getUsersForAdmin(keyword, 100);
@@ -243,7 +357,8 @@ app.get("/api/enterprise/product-pages", auth_1.authenticateToken, async (req, r
     }
     const userId = req.user?.user_id;
     const rawStatus = req.query.status;
-    const status = typeof rawStatus === "string" && PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus)
+    const status = typeof rawStatus === "string" &&
+        PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus)
         ? rawStatus
         : undefined;
     if (!userId) {
@@ -255,7 +370,9 @@ app.get("/api/enterprise/product-pages", auth_1.authenticateToken, async (req, r
     }
     catch (err) {
         console.error("get enterprise product pages error:", err);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return res
+            .status(500)
+            .json({ success: false, message: "Internal server error" });
     }
 });
 app.get("/api/enterprise/product-pages/:pageId", auth_1.authenticateToken, async (req, res) => {
@@ -263,23 +380,31 @@ app.get("/api/enterprise/product-pages/:pageId", auth_1.authenticateToken, async
         return res.status(403).json({ success: false, message: "Forbidden" });
     }
     const userId = req.user?.user_id;
-    const pageId = Array.isArray(req.params.pageId) ? req.params.pageId[0] : req.params.pageId;
+    const pageId = Array.isArray(req.params.pageId)
+        ? req.params.pageId[0]
+        : req.params.pageId;
     if (!userId) {
         return res.status(401).json({ success: false, message: "Unauthorized" });
     }
     if (!pageId) {
-        return res.status(400).json({ success: false, message: "pageId is required" });
+        return res
+            .status(400)
+            .json({ success: false, message: "pageId is required" });
     }
     try {
         const page = await dataAccess_1.db.getProductCustomizationPageById(pageId);
         if (!page || page.user_id !== userId) {
-            return res.status(404).json({ success: false, message: "Page not found" });
+            return res
+                .status(404)
+                .json({ success: false, message: "Page not found" });
         }
         return res.json({ success: true, page });
     }
     catch (err) {
         console.error("get enterprise product page detail error:", err);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return res
+            .status(500)
+            .json({ success: false, message: "Internal server error" });
     }
 });
 app.post("/api/enterprise/product-pages", auth_1.authenticateToken, async (req, res) => {
@@ -294,18 +419,26 @@ app.post("/api/enterprise/product-pages", auth_1.authenticateToken, async (req, 
     const productName = (product_name || "").trim();
     const productSummary = (product_summary || "").trim();
     if (!productName) {
-        return res.status(400).json({ success: false, message: "product_name is required" });
+        return res
+            .status(400)
+            .json({ success: false, message: "product_name is required" });
     }
     if (productName.length > MAX_PRODUCT_NAME_LENGTH) {
-        return res.status(400).json({ success: false, message: "product_name is too long" });
+        return res
+            .status(400)
+            .json({ success: false, message: "product_name is too long" });
     }
     if (productSummary.length > MAX_PRODUCT_SUMMARY_LENGTH) {
-        return res.status(400).json({ success: false, message: "product_summary is too long" });
+        return res
+            .status(400)
+            .json({ success: false, message: "product_summary is too long" });
     }
     try {
         const normalizedParameters = normalizeProductPageParameters(parameters || []);
         const page = await dataAccess_1.db.saveProductCustomizationPage({
-            pageId: typeof page_id === "string" && page_id.trim() ? page_id.trim() : undefined,
+            pageId: typeof page_id === "string" && page_id.trim()
+                ? page_id.trim()
+                : undefined,
             userId,
             productName,
             productSummary: productSummary || null,
@@ -326,17 +459,23 @@ app.post("/api/enterprise/product-pages/:pageId/submit", auth_1.authenticateToke
         return res.status(403).json({ success: false, message: "Forbidden" });
     }
     const userId = req.user?.user_id;
-    const pageId = Array.isArray(req.params.pageId) ? req.params.pageId[0] : req.params.pageId;
+    const pageId = Array.isArray(req.params.pageId)
+        ? req.params.pageId[0]
+        : req.params.pageId;
     if (!userId) {
         return res.status(401).json({ success: false, message: "Unauthorized" });
     }
     if (!pageId) {
-        return res.status(400).json({ success: false, message: "pageId is required" });
+        return res
+            .status(400)
+            .json({ success: false, message: "pageId is required" });
     }
     try {
         const existingPage = await dataAccess_1.db.getProductCustomizationPageById(pageId);
         if (!existingPage || existingPage.user_id !== userId) {
-            return res.status(404).json({ success: false, message: "Page not found" });
+            return res
+                .status(404)
+                .json({ success: false, message: "Page not found" });
         }
         if (existingPage.parameters.length === 0) {
             return res.status(400).json({
@@ -349,12 +488,15 @@ app.post("/api/enterprise/product-pages/:pageId/submit", auth_1.authenticateToke
     }
     catch (err) {
         console.error("submit enterprise product page error:", err);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return res
+            .status(500)
+            .json({ success: false, message: "Internal server error" });
     }
 });
 app.get("/api/admin/product-pages", auth_1.authenticateToken, auth_1.authenticateAdmin, async (req, res) => {
     const rawStatus = req.query.status;
-    const status = typeof rawStatus === "string" && PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus)
+    const status = typeof rawStatus === "string" &&
+        PRODUCT_PAGE_STATUS_VALUES.includes(rawStatus)
         ? rawStatus
         : undefined;
     try {
@@ -363,26 +505,40 @@ app.get("/api/admin/product-pages", auth_1.authenticateToken, auth_1.authenticat
     }
     catch (err) {
         console.error("get admin product pages error:", err);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return res
+            .status(500)
+            .json({ success: false, message: "Internal server error" });
     }
 });
 app.post("/api/admin/product-pages/:pageId/review", auth_1.authenticateToken, auth_1.authenticateAdmin, async (req, res) => {
     const reviewerId = req.user?.user_id;
-    const pageId = Array.isArray(req.params.pageId) ? req.params.pageId[0] : req.params.pageId;
+    const pageId = Array.isArray(req.params.pageId)
+        ? req.params.pageId[0]
+        : req.params.pageId;
     const { action, review_comment } = req.body;
     if (!reviewerId) {
         return res.status(401).json({ success: false, message: "Unauthorized" });
     }
     if (!pageId) {
-        return res.status(400).json({ success: false, message: "pageId is required" });
+        return res
+            .status(400)
+            .json({ success: false, message: "pageId is required" });
     }
-    const nextStatus = action === "approve" ? "approved" : action === "reject" ? "rejected" : null;
+    const nextStatus = action === "approve"
+        ? "approved"
+        : action === "reject"
+            ? "rejected"
+            : null;
     if (!nextStatus) {
-        return res.status(400).json({ success: false, message: "action must be approve or reject" });
+        return res
+            .status(400)
+            .json({ success: false, message: "action must be approve or reject" });
     }
     const reviewComment = (review_comment || "").trim();
     if (reviewComment.length > MAX_REVIEW_COMMENT_LENGTH) {
-        return res.status(400).json({ success: false, message: "review_comment is too long" });
+        return res
+            .status(400)
+            .json({ success: false, message: "review_comment is too long" });
     }
     try {
         const page = await dataAccess_1.db.reviewProductCustomizationPage({
@@ -392,13 +548,109 @@ app.post("/api/admin/product-pages/:pageId/review", auth_1.authenticateToken, au
             reviewComment: reviewComment || null,
         });
         if (!page) {
-            return res.status(404).json({ success: false, message: "Page not found" });
+            return res
+                .status(404)
+                .json({ success: false, message: "Page not found" });
         }
         return res.json({ success: true, page });
     }
     catch (err) {
         console.error("review product page error:", err);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return res
+            .status(500)
+            .json({ success: false, message: "Internal server error" });
+    }
+});
+/**
+ * 获取所有已审核通过的产品定制页面 (公开接口)
+ * 路径: GET /api/public/product-customization-pages
+ */
+app.get("/api/public/product-customization-pages", auth_1.authenticateToken, async (req, res) => {
+    try {
+        const pages = await dataAccess_1.db.getPublicProductCustomizationPages();
+        return res.json({ success: true, pages });
+    }
+    catch (err) {
+        console.error("fetch public product pages error:", err);
+        return res
+            .status(500)
+            .json({ success: false, message: "Internal server error" });
+    }
+});
+app.get("/api/public/product-customization-pages/:pageId", auth_1.authenticateToken, async (req, res) => {
+    const pageId = Array.isArray(req.params.pageId)
+        ? req.params.pageId[0]
+        : req.params.pageId;
+    try {
+        const page = await dataAccess_1.db.getProductCustomizationPageById(pageId);
+        if (!page || page.status !== "approved") {
+            return res
+                .status(404)
+                .json({ success: false, message: "Page not found or not approved" });
+        }
+        return res.json({ success: true, page });
+    }
+    catch (err) {
+        return res.status(500).json({ success: false });
+    }
+});
+app.post("/api/orders/pool-cue", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    const { config, contact_name, contact_phone, shipping_address, order_note, } = req.body;
+    if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const contactName = String(contact_name || "").trim();
+    const contactPhone = String(contact_phone || "").trim();
+    const shippingAddress = String(shipping_address || "").trim();
+    const orderNote = String(order_note || "").trim();
+    if (!contactName) {
+        return res.status(400).json({ success: false, message: "contact_name is required" });
+    }
+    if (!contactPhone) {
+        return res.status(400).json({ success: false, message: "contact_phone is required" });
+    }
+    if (!shippingAddress) {
+        return res.status(400).json({ success: false, message: "shipping_address is required" });
+    }
+    if (contactName.length > MAX_ORDER_CONTACT_NAME_LENGTH) {
+        return res.status(400).json({ success: false, message: "contact_name is too long" });
+    }
+    if (contactPhone.length > MAX_ORDER_CONTACT_PHONE_LENGTH) {
+        return res.status(400).json({ success: false, message: "contact_phone is too long" });
+    }
+    if (shippingAddress.length > MAX_ORDER_SHIPPING_ADDRESS_LENGTH) {
+        return res.status(400).json({ success: false, message: "shipping_address is too long" });
+    }
+    if (orderNote.length > MAX_ORDER_NOTE_LENGTH) {
+        return res.status(400).json({ success: false, message: "order_note is too long" });
+    }
+    try {
+        const normalizedConfig = normalizePoolCueConfig(config);
+        const pricing = calculatePoolCuePrice(normalizedConfig);
+        const order = await dataAccess_1.db.createPoolCueOrder({
+            userId,
+            productName: "碳纤维台球杆",
+            configuration: normalizedConfig,
+            pricingLines: pricing.lines,
+            totalPrice: pricing.total,
+            contactName,
+            contactPhone,
+            shippingAddress,
+            orderNote: orderNote || null,
+        });
+        return res.status(201).json({
+            success: true,
+            message: "Order created",
+            order,
+        });
+    }
+    catch (err) {
+        console.error("create pool cue order error:", err);
+        return res.status(400).json({
+            success: false,
+            message: err instanceof Error ? err.message : "Invalid request",
+        });
     }
 });
 app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
@@ -594,7 +846,9 @@ app.post("/api/my_info/works", auth_1.authenticateToken, async (req, res) => {
             message: "image_path must be under /uploads/",
         });
     }
-    if (description !== null && description !== undefined && typeof description !== "string") {
+    if (description !== null &&
+        description !== undefined &&
+        typeof description !== "string") {
         return res.status(400).json({
             success: false,
             message: "description must be string or null",
@@ -668,8 +922,8 @@ app.delete("/api/my_info/works/:workId", auth_1.authenticateToken, async (req, r
 // 发送邮箱验证码
 app.post("/api/send-verification-code", async (req, res) => {
     const { email } = req.body;
-    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+    const userAgent = req.headers["user-agent"];
     try {
         if (!email) {
             return res.status(400).json({
@@ -709,7 +963,7 @@ app.post("/api/send-verification-code", async (req, res) => {
             email,
             code,
             expiresAt,
-            ipAddress: typeof ipAddress === 'string' ? ipAddress : undefined,
+            ipAddress: typeof ipAddress === "string" ? ipAddress : undefined,
             userAgent,
         });
         // 发送验证码邮件
@@ -1169,7 +1423,9 @@ app.post("/api/chat", auth_1.authenticateToken, async (req, res) => {
             if (!res.headersSent) {
                 res.status(502).json({
                     error: "Dify stream error",
-                    details: streamError instanceof Error ? streamError.message : "Unknown stream error",
+                    details: streamError instanceof Error
+                        ? streamError.message
+                        : "Unknown stream error",
                 });
             }
             else {

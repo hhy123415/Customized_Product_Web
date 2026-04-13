@@ -13,11 +13,13 @@
  * - CSS Modules 实现样式隔离
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import api from "../api/axios";
 import styles from "../css/PoolCueCustomization.module.css";
+import { useAuth } from "../hooks/useAuth";
 
 // ==================== 类型定义区 ====================
 
@@ -60,6 +62,13 @@ interface CueConfig {
 interface PriceLine {
   label: string;   // 项目描述
   amount: number;  // 金额（人民币）
+}
+
+interface OrderFormState {
+  contactName: string;
+  contactPhone: string;
+  shippingAddress: string;
+  orderNote: string;
 }
 
 /** 
@@ -486,10 +495,20 @@ function calculatePrice(config: CueConfig) {
  */
 function PoolCueCustomization() {
   // ===== 状态定义 =====
+  const { auth } = useAuth();
   const [config, setConfig] = useState(INITIAL_CONFIG);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [diagnostic, setDiagnostic] = useState<ModelDiagnostic | null>(null);
   const [missingParts, setMissingParts] = useState<string[]>([]);
+  const [orderForm, setOrderForm] = useState<OrderFormState>({
+    contactName: "",
+    contactPhone: "",
+    shippingAddress: "",
+    orderNote: "",
+  });
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderMessage, setOrderMessage] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   // ===== Refs 定义 =====
   const previewRef = useRef<HTMLDivElement | null>(null);      // 3D 容器
@@ -502,6 +521,78 @@ function PoolCueCustomization() {
 
   // 价格计算（缓存优化）
   const pricing = useMemo(() => calculatePrice(config), [config]);
+
+  const handleOrderFieldChange =
+    (field: keyof OrderFormState) =>
+    (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const value = event.target.value;
+      setOrderForm((prev) => ({ ...prev, [field]: value }));
+    };
+
+  const handleSubmitOrder = async () => {
+    if (!auth.isLoggedIn) {
+      setOrderError("请先登录后再提交订单。");
+      setOrderMessage(null);
+      return;
+    }
+
+    if (!orderForm.contactName.trim()) {
+      setOrderError("请填写联系人姓名。");
+      setOrderMessage(null);
+      return;
+    }
+
+    if (!orderForm.contactPhone.trim()) {
+      setOrderError("请填写联系电话。");
+      setOrderMessage(null);
+      return;
+    }
+
+    if (!orderForm.shippingAddress.trim()) {
+      setOrderError("请填写收货地址。");
+      setOrderMessage(null);
+      return;
+    }
+
+    setOrderSubmitting(true);
+    setOrderError(null);
+    setOrderMessage(null);
+
+    try {
+      const response = await api.post("/orders/pool-cue", {
+        config,
+        contact_name: orderForm.contactName.trim(),
+        contact_phone: orderForm.contactPhone.trim(),
+        shipping_address: orderForm.shippingAddress.trim(),
+        order_note: orderForm.orderNote.trim() || null,
+      });
+
+      const orderId = response.data?.order?.order_id;
+      setOrderMessage(
+        orderId
+          ? `订单已提交成功，订单号：${orderId}。`
+          : "订单已提交成功，我们会尽快与你联系。",
+      );
+      setOrderForm({
+        contactName: "",
+        contactPhone: "",
+        shippingAddress: "",
+        orderNote: "",
+      });
+    } catch (error: unknown) {
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { message?: string } } }).response?.data
+          ?.message === "string"
+          ? (error as { response: { data: { message: string } } }).response.data.message
+          : "订单提交失败，请稍后重试。";
+      setOrderError(message);
+    } finally {
+      setOrderSubmitting(false);
+    }
+  };
 
   // ===== Effect 1: 初始化 Three.js 场景（仅执行一次） =====
   useEffect(() => {
@@ -812,6 +903,71 @@ function PoolCueCustomization() {
               </li>
             ))}
           </ul>
+
+          <div className={styles.orderCard}>
+            <h3>立即下单</h3>
+            <p className={styles.orderHint}>
+              当前配置会随订单一并保存，后端将按服务器端规则重新计算价格。
+            </p>
+
+            {!auth.isLoggedIn && (
+              <p className={styles.orderTip}>
+                请先登录账号后再提交订单。
+              </p>
+            )}
+
+            <label className={styles.field}>
+              <span>联系人</span>
+              <input
+                type="text"
+                value={orderForm.contactName}
+                onChange={handleOrderFieldChange("contactName")}
+                placeholder="请输入联系人姓名"
+              />
+            </label>
+
+            <label className={styles.field}>
+              <span>联系电话</span>
+              <input
+                type="text"
+                value={orderForm.contactPhone}
+                onChange={handleOrderFieldChange("contactPhone")}
+                placeholder="请输入手机号或座机"
+              />
+            </label>
+
+            <label className={styles.field}>
+              <span>收货地址</span>
+              <textarea
+                value={orderForm.shippingAddress}
+                onChange={handleOrderFieldChange("shippingAddress")}
+                placeholder="请输入详细收货地址"
+                rows={3}
+              />
+            </label>
+
+            <label className={styles.field}>
+              <span>订单备注</span>
+              <textarea
+                value={orderForm.orderNote}
+                onChange={handleOrderFieldChange("orderNote")}
+                placeholder="可填写刻字内容、交付偏好等"
+                rows={3}
+              />
+            </label>
+
+            {orderError && <p className={styles.orderError}>{orderError}</p>}
+            {orderMessage && <p className={styles.orderSuccess}>{orderMessage}</p>}
+
+            <button
+              type="button"
+              className={styles.orderButton}
+              disabled={orderSubmitting || !auth.isLoggedIn}
+              onClick={handleSubmitOrder}
+            >
+              {orderSubmitting ? "提交中..." : `提交订单 ${CURRENCY.format(pricing.total)}`}
+            </button>
+          </div>
         </article>
       </section>
     </main>

@@ -96,6 +96,19 @@
   background: #f8fbfd;
 }
 
+.field input[type="text"],
+.field textarea {
+  border-radius: 8px;
+  border: 1px solid #c5d8e5;
+  padding: 10px 12px;
+  color: #1b435e;
+  background: #f8fbfd;
+  font: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  width: 100%;
+}
+
 .checkbox {
   margin-top: 4px;
   display: flex;
@@ -153,6 +166,60 @@
 .priceList li strong {
   color: #0f5f8d;
   white-space: nowrap;
+}
+
+.orderCard {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #dbe5ee;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.orderCard h3 {
+  margin: 0;
+  color: #133b56;
+}
+
+.orderHint,
+.orderTip,
+.orderError,
+.orderSuccess {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.orderHint,
+.orderTip {
+  color: #537188;
+}
+
+.orderError {
+  color: #a33b2f;
+}
+
+.orderSuccess {
+  color: #16653d;
+}
+
+.orderButton {
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0f6e9d 0%, #1992c6 100%);
+  color: #ffffff;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 18px rgba(15, 95, 141, 0.2);
+}
+
+.orderButton:disabled {
+  cursor: not-allowed;
+  background: #9bb6c8;
+  box-shadow: none;
 }
 
 @media (max-width: 1080px) {

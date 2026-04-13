@@ -18,8 +18,6 @@ const getRoleTag = (role?: string) => {
   switch (role) {
     case "admin":
       return { text: "管理员", className: styles.tagAdmin };
-    case "enterprise":
-      return { text: "企业", className: styles.tagEnterprise };
     default:
       return { text: "用户", className: styles.tagUser };
   }

@@ -261,6 +261,68 @@ exports.db = {
         }
         return this.getProductCustomizationPageById(pageId);
     },
+    async getPublicProductCustomizationPages() {
+        const result = await pool.query(`
+        SELECT
+          p.page_id,
+          p.user_id,
+          p.product_name,
+          p.product_summary,
+          p.parameters,
+          p.status,
+          p.created_at,
+          p.updated_at,
+          u.username AS publisher_username
+        FROM product_customization_pages p
+        JOIN users u ON u.user_id = p.user_id
+        WHERE p.status = 'approved'
+        ORDER BY p.created_at DESC, p.page_id DESC
+      `);
+        return result.rows;
+    },
+    async createPoolCueOrder(params) {
+        const { userId, productName, configuration, pricingLines, totalPrice, contactName, contactPhone, shippingAddress, orderNote, } = params;
+        const result = await pool.query(`
+        INSERT INTO pool_cue_orders (
+          user_id,
+          product_name,
+          configuration,
+          pricing_lines,
+          total_price,
+          contact_name,
+          contact_phone,
+          shipping_address,
+          order_note,
+          status
+        )
+        VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, $8, $9, 'submitted')
+        RETURNING
+          order_id,
+          user_id,
+          product_name,
+          configuration,
+          pricing_lines,
+          total_price,
+          contact_name,
+          contact_phone,
+          shipping_address,
+          order_note,
+          status,
+          created_at,
+          updated_at
+      `, [
+            userId,
+            productName,
+            JSON.stringify(configuration),
+            JSON.stringify(pricingLines),
+            totalPrice,
+            contactName,
+            contactPhone,
+            shippingAddress,
+            orderNote,
+        ]);
+        return result.rows[0];
+    },
     async getUserWorksByUserId(userId) {
         const result = await pool.query(`
         SELECT

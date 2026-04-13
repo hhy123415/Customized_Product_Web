@@ -7,7 +7,6 @@ import { useAuth } from "../hooks/useAuth";
 
 const roleDisplayMap: Record<string, string> = {
   regular: "普通用户",
-  enterprise: "企业用户",
   admin: "管理员",
 };
 

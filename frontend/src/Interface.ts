@@ -16,7 +16,7 @@ export interface UserWork {
   updated_at: string;
 }
 
-type Role = "regular" | "enterprise" | "admin";
+type Role = "regular" | "admin";
 
 export interface AdminUser {
   user_id: string;
@@ -65,30 +65,36 @@ export interface Comment {
   author_img_path?: string | null;
 }
 
-export type ProductPageStatus = "draft" | "pending_review" | "approved" | "rejected";
-
-export interface ProductPageParameter {
-  id: string;
-  name: string;
-  type: "text" | "number" | "select";
-  required: boolean;
-  unit?: string | null;
-  default_value?: string | null;
-  options?: string[];
-}
-
-export interface ProductCustomizationPage {
-  page_id: string;
+export interface PoolCueOrder {
+  order_id: string;
   user_id: string;
   product_name: string;
-  product_summary: string | null;
-  parameters: ProductPageParameter[];
-  status: ProductPageStatus;
-  review_comment: string | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
+  configuration: {
+    lengthCm: number;
+    weightOz: number;
+    tipDiameterMm: number;
+    jointType: "stainless-steel" | "titanium";
+    wrapType: "carbon-grip" | "genuine-leather" | "none";
+    finishStyle:
+      | "matte-carbon"
+      | "gloss-carbon"
+      | "stealth-black"
+      | "ice-silver"
+      | "ocean-blue"
+      | "crimson-red";
+    caseOption: "none" | "basic" | "pro";
+    includeLaserEngraving: boolean;
+  };
+  pricing_lines: {
+    label: string;
+    amount: number;
+  }[];
+  total_price: number;
+  contact_name: string;
+  contact_phone: string;
+  shipping_address: string;
+  order_note: string | null;
+  status: "submitted";
   created_at: string;
   updated_at: string;
-  publisher_username?: string;
-  reviewer_username?: string | null;
 }

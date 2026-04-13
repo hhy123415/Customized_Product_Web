@@ -5,7 +5,7 @@ import axios from "axios";
 import api from "../api/axios";
 import style from "../css/Register.module.css";
 
-type Role = "regular" | "enterprise" | "admin";
+type Role = "regular" | "admin";
 
 interface FormData {
   username: string;
@@ -26,7 +26,6 @@ interface RegisterResponse {
 
 const roleLabelMap: Record<Role, string> = {
   regular: "普通用户",
-  enterprise: "企业账号",
   admin: "管理员",
 };
 
@@ -146,9 +145,8 @@ function Register() {
       newErrors.verificationCode = "验证码必须是6位数字";
     }
 
-    if ((role === "enterprise" || role === "admin") && !formData.registerCode.trim()) {
-      newErrors.registerCode =
-        role === "admin" ? "请输入管理员专用注册码" : "请输入企业专用注册码";
+    if (role === "admin" && !formData.registerCode.trim()) {
+      newErrors.registerCode = "请输入管理员专用注册码";
     }
 
     return newErrors;
@@ -196,9 +194,8 @@ function Register() {
     navigate("/login");
   };
 
-  const showRegisterCode = role === "enterprise" || role === "admin";
-  const registerCodePlaceholder =
-    role === "admin" ? "请输入管理员注册码" : "请输入由系统发放的企业注册码";
+  const showRegisterCode = role === "admin";
+  const registerCodePlaceholder = "请输入管理员注册码";
 
   return (
     <div className={style["register-container"]}>
@@ -214,13 +211,6 @@ function Register() {
             onClick={() => handleRoleChange("regular")}
           >
             普通用户
-          </button>
-          <button
-            type="button"
-            className={`${style["tab-btn"]} ${role === "enterprise" ? style.active : ""}`}
-            onClick={() => handleRoleChange("enterprise")}
-          >
-            企业用户
           </button>
           <button
             type="button"
@@ -314,14 +304,16 @@ function Register() {
                 {isSendingCode
                   ? "发送中..."
                   : countdown > 0
-                  ? `${countdown}秒后重试`
-                  : codeSent
-                  ? "重新发送"
-                  : "发送验证码"}
+                    ? `${countdown}秒后重试`
+                    : codeSent
+                      ? "重新发送"
+                      : "发送验证码"}
               </button>
             </div>
             {errors.verificationCode && (
-              <span className={style["error-message"]}>{errors.verificationCode}</span>
+              <span className={style["error-message"]}>
+                {errors.verificationCode}
+              </span>
             )}
           </div>
 
@@ -340,12 +332,16 @@ function Register() {
                 className={`${style["form-input"]} ${errors.registerCode ? style.error : ""}`}
               />
               {errors.registerCode && (
-                <span className={style["error-message"]}>{errors.registerCode}</span>
+                <span className={style["error-message"]}>
+                  {errors.registerCode}
+                </span>
               )}
             </div>
           )}
 
-          {errors.submit && <div className={style["submit-error"]}>{errors.submit}</div>}
+          {errors.submit && (
+            <div className={style["submit-error"]}>{errors.submit}</div>
+          )}
 
           <button
             type="submit"

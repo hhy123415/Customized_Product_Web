@@ -1,17 +1,3 @@
-export interface HotelRow {
-  id: number;
-  name_zh: string;
-  name_en: string;
-  address: string;
-  star_rating: number;
-  operating_period: string;
-  description?: string; // description 是可选的
-  created_at: Date;
-  updated_at: Date;
-  active: boolean;
-  user_id: number;
-}
-
 type Role = "regular" | "enterprise" | "admin";
 
 export interface UserRow {
@@ -101,30 +87,42 @@ export interface EmailVerificationCodeRow {
   user_agent?: string | null;
 }
 
-export type ProductPageStatus = "draft" | "pending_review" | "approved" | "rejected";
-
-export interface ProductPageParameterInput {
-  id: string;
-  name: string;
-  type: "text" | "number" | "select";
-  required: boolean;
-  unit?: string | null;
-  default_value?: string | null;
-  options?: string[];
+export interface PoolCueOrderConfig {
+  lengthCm: number;
+  weightOz: number;
+  tipDiameterMm: number;
+  jointType: "stainless-steel" | "titanium";
+  wrapType: "carbon-grip" | "genuine-leather" | "none";
+  finishStyle:
+    | "matte-carbon"
+    | "gloss-carbon"
+    | "stealth-black"
+    | "ice-silver"
+    | "ocean-blue"
+    | "crimson-red";
+  caseOption: "none" | "basic" | "pro";
+  includeLaserEngraving: boolean;
 }
 
-export interface ProductCustomizationPageRow {
-  page_id: string;
+export interface PoolCueOrderPriceLine {
+  label: string;
+  amount: number;
+}
+
+export type PoolCueOrderStatus = "submitted";
+
+export interface PoolCueOrderRow {
+  order_id: string;
   user_id: string;
   product_name: string;
-  product_summary: string | null;
-  parameters: ProductPageParameterInput[];
-  status: ProductPageStatus;
-  review_comment: string | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
+  configuration: PoolCueOrderConfig;
+  pricing_lines: PoolCueOrderPriceLine[];
+  total_price: number;
+  contact_name: string;
+  contact_phone: string;
+  shipping_address: string;
+  order_note: string | null;
+  status: PoolCueOrderStatus;
   created_at: string;
   updated_at: string;
-  publisher_username?: string;
-  reviewer_username?: string | null;
 }

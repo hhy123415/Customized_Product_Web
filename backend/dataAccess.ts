@@ -3,9 +3,9 @@ import { Pool } from "pg";
 import type {
   AdminUserRow,
   CommentRow,
-  ProductCustomizationPageRow,
-  ProductPageParameterInput,
-  ProductPageStatus,
+  PoolCueOrderConfig,
+  PoolCueOrderPriceLine,
+  PoolCueOrderRow,
   PostDetailRow,
   PostRow,
   UserPublicProfileRow,
@@ -110,7 +110,9 @@ export const db = {
     return result.rows[0] ?? null;
   },
 
-  async getUserPublicProfileById(userId: string): Promise<UserPublicProfileRow | null> {
+  async getUserPublicProfileById(
+    userId: string,
+  ): Promise<UserPublicProfileRow | null> {
     const result = await pool.query<UserPublicProfileRow>(
       `
         SELECT
@@ -128,10 +130,15 @@ export const db = {
     return result.rows[0] ?? null;
   },
 
-  async getUsersForAdmin(keyword: string, limit: number = 100): Promise<AdminUserRow[]> {
+  async getUsersForAdmin(
+    keyword: string,
+    limit: number = 100,
+  ): Promise<AdminUserRow[]> {
     const normalizedKeyword = keyword.trim();
     const wildcard = `%${normalizedKeyword}%`;
-    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(200, Math.floor(limit))) : 100;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.max(1, Math.min(200, Math.floor(limit)))
+      : 100;
 
     if (!normalizedKeyword) {
       const result = await pool.query<AdminUserRow>(
@@ -179,239 +186,73 @@ export const db = {
     return result.rows;
   },
 
-  async getProductCustomizationPagesByUserId(
-    userId: string,
-    status?: ProductPageStatus,
-  ): Promise<ProductCustomizationPageRow[]> {
-    const params: string[] = [userId];
-    const conditions = ["p.user_id = $1"];
-
-    if (status) {
-      params.push(status);
-      conditions.push(`p.status = $${params.length}`);
-    }
-
-    const result = await pool.query<ProductCustomizationPageRow>(
-      `
-        SELECT
-          p.page_id,
-          p.user_id,
-          p.product_name,
-          p.product_summary,
-          p.parameters,
-          p.status,
-          p.review_comment,
-          p.reviewed_by,
-          p.reviewed_at,
-          p.created_at,
-          p.updated_at,
-          u.username AS publisher_username,
-          reviewer.username AS reviewer_username
-        FROM product_customization_pages p
-        JOIN users u ON u.user_id = p.user_id
-        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
-        WHERE ${conditions.join(" AND ")}
-        ORDER BY p.updated_at DESC, p.page_id DESC
-      `,
-      params,
-    );
-    return result.rows;
-  },
-
-  async getProductCustomizationPageById(pageId: string): Promise<ProductCustomizationPageRow | null> {
-    const result = await pool.query<ProductCustomizationPageRow>(
-      `
-        SELECT
-          p.page_id,
-          p.user_id,
-          p.product_name,
-          p.product_summary,
-          p.parameters,
-          p.status,
-          p.review_comment,
-          p.reviewed_by,
-          p.reviewed_at,
-          p.created_at,
-          p.updated_at,
-          u.username AS publisher_username,
-          reviewer.username AS reviewer_username
-        FROM product_customization_pages p
-        JOIN users u ON u.user_id = p.user_id
-        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
-        WHERE p.page_id = $1
-      `,
-      [pageId],
-    );
-    return result.rows[0] ?? null;
-  },
-
-  async saveProductCustomizationPage(params: {
-    pageId?: string;
+  async createPoolCueOrder(params: {
     userId: string;
     productName: string;
-    productSummary: string | null;
-    parameters: ProductPageParameterInput[];
-  }): Promise<ProductCustomizationPageRow> {
-    const { pageId, userId, productName, productSummary, parameters } = params;
-    const normalizedParameters = JSON.stringify(parameters);
+    configuration: PoolCueOrderConfig;
+    pricingLines: PoolCueOrderPriceLine[];
+    totalPrice: number;
+    contactName: string;
+    contactPhone: string;
+    shippingAddress: string;
+    orderNote: string | null;
+  }): Promise<PoolCueOrderRow> {
+    const {
+      userId,
+      productName,
+      configuration,
+      pricingLines,
+      totalPrice,
+      contactName,
+      contactPhone,
+      shippingAddress,
+      orderNote,
+    } = params;
 
-    if (pageId) {
-      const updated = await pool.query<{ page_id: string }>(
-        `
-          UPDATE product_customization_pages
-          SET
-            product_name = $1,
-            product_summary = $2,
-            parameters = $3::jsonb,
-            status = 'draft',
-            review_comment = NULL,
-            reviewed_by = NULL,
-            reviewed_at = NULL,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE page_id = $4 AND user_id = $5
-          RETURNING page_id
-        `,
-        [productName, productSummary, normalizedParameters, pageId, userId],
-      );
-
-      if (updated.rows[0]) {
-        return (await this.getProductCustomizationPageById(updated.rows[0].page_id)) as ProductCustomizationPageRow;
-      }
-    }
-
-    const createdPageId = pageId || randomUUID();
-    await pool.query(
+    const result = await pool.query<PoolCueOrderRow>(
       `
-        INSERT INTO product_customization_pages (
-          page_id,
+        INSERT INTO pool_cue_orders (
           user_id,
           product_name,
-          product_summary,
-          parameters,
+          configuration,
+          pricing_lines,
+          total_price,
+          contact_name,
+          contact_phone,
+          shipping_address,
+          order_note,
           status
         )
-        VALUES ($1, $2, $3, $4, $5::jsonb, 'draft')
+        VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, $8, $9, 'submitted')
+        RETURNING
+          order_id,
+          user_id,
+          product_name,
+          configuration,
+          pricing_lines,
+          total_price,
+          contact_name,
+          contact_phone,
+          shipping_address,
+          order_note,
+          status,
+          created_at,
+          updated_at
       `,
-      [createdPageId, userId, productName, productSummary, normalizedParameters],
+      [
+        userId,
+        productName,
+        JSON.stringify(configuration),
+        JSON.stringify(pricingLines),
+        totalPrice,
+        contactName,
+        contactPhone,
+        shippingAddress,
+        orderNote,
+      ],
     );
 
-    return (await this.getProductCustomizationPageById(createdPageId)) as ProductCustomizationPageRow;
-  },
-
-  async submitProductCustomizationPage(
-    pageId: string,
-    userId: string,
-  ): Promise<ProductCustomizationPageRow | null> {
-    const updated = await pool.query<{ page_id: string }>(
-      `
-        UPDATE product_customization_pages
-        SET
-          status = 'pending_review',
-          review_comment = NULL,
-          reviewed_by = NULL,
-          reviewed_at = NULL,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE page_id = $1 AND user_id = $2
-        RETURNING page_id
-      `,
-      [pageId, userId],
-    );
-
-    if (!updated.rows[0]) {
-      return null;
-    }
-
-    return this.getProductCustomizationPageById(pageId);
-  },
-
-  async getProductCustomizationPagesForAdmin(
-    status?: ProductPageStatus,
-  ): Promise<ProductCustomizationPageRow[]> {
-    const params: string[] = [];
-    const whereClause = status ? "WHERE p.status = $1" : "";
-    if (status) {
-      params.push(status);
-    }
-
-    const result = await pool.query<ProductCustomizationPageRow>(
-      `
-        SELECT
-          p.page_id,
-          p.user_id,
-          p.product_name,
-          p.product_summary,
-          p.parameters,
-          p.status,
-          p.review_comment,
-          p.reviewed_by,
-          p.reviewed_at,
-          p.created_at,
-          p.updated_at,
-          u.username AS publisher_username,
-          reviewer.username AS reviewer_username
-        FROM product_customization_pages p
-        JOIN users u ON u.user_id = p.user_id
-        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
-        ${whereClause}
-        ORDER BY
-          CASE WHEN p.status = 'pending_review' THEN 0 ELSE 1 END,
-          p.updated_at DESC,
-          p.page_id DESC
-      `,
-      params,
-    );
-    return result.rows;
-  },
-
-  async reviewProductCustomizationPage(params: {
-    pageId: string;
-    reviewerId: string;
-    status: Extract<ProductPageStatus, "approved" | "rejected">;
-    reviewComment: string | null;
-  }): Promise<ProductCustomizationPageRow | null> {
-    const { pageId, reviewerId, status, reviewComment } = params;
-    const updated = await pool.query<{ page_id: string }>(
-      `
-        UPDATE product_customization_pages
-        SET
-          status = $1,
-          review_comment = $2,
-          reviewed_by = $3,
-          reviewed_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE page_id = $4
-        RETURNING page_id
-      `,
-      [status, reviewComment, reviewerId, pageId],
-    );
-
-    if (!updated.rows[0]) {
-      return null;
-    }
-
-    return this.getProductCustomizationPageById(pageId);
-  },
-
-  async getPublicProductCustomizationPages(): Promise<ProductCustomizationPageRow[]> {
-    const result = await pool.query<ProductCustomizationPageRow>(
-      `
-        SELECT
-          p.page_id,
-          p.user_id,
-          p.product_name,
-          p.product_summary,
-          p.parameters,
-          p.status,
-          p.created_at,
-          p.updated_at,
-          u.username AS publisher_username
-        FROM product_customization_pages p
-        JOIN users u ON u.user_id = p.user_id
-        WHERE p.status = 'approved'
-        ORDER BY p.created_at DESC, p.page_id DESC
-      `
-    );
-    return result.rows;
+    return result.rows[0];
   },
 
   async getUserWorksByUserId(userId: string): Promise<UserWorkRow[]> {
@@ -626,7 +467,10 @@ export const db = {
     return result.rows[0];
   },
 
-  async getValidVerificationCode(email: string, code: string): Promise<EmailVerificationCodeRow | null> {
+  async getValidVerificationCode(
+    email: string,
+    code: string,
+  ): Promise<EmailVerificationCodeRow | null> {
     const result = await pool.query<EmailVerificationCodeRow>(
       `
         SELECT * FROM email_verification_codes
@@ -646,7 +490,10 @@ export const db = {
     );
   },
 
-  async getRecentVerificationAttempts(email: string, minutes: number = 10): Promise<number> {
+  async getRecentVerificationAttempts(
+    email: string,
+    minutes: number = 10,
+  ): Promise<number> {
     const result = await pool.query(
       `
         SELECT COUNT(*) as count FROM email_verification_codes
@@ -658,6 +505,8 @@ export const db = {
   },
 
   async cleanupExpiredVerificationCodes(): Promise<void> {
-    await pool.query("DELETE FROM email_verification_codes WHERE expires_at < CURRENT_TIMESTAMP");
+    await pool.query(
+      "DELETE FROM email_verification_codes WHERE expires_at < CURRENT_TIMESTAMP",
+    );
   },
 };
