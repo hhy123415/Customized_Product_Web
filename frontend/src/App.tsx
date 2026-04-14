@@ -18,6 +18,7 @@ import { useAuth } from "./hooks/useAuth";
 import About from "./pages/About";
 import CreatePostPage from "./pages/CreatePost";
 import AdminUserQueryPage from "./pages/AdminUserQuery";
+import AdminOrderQueryPage from "./pages/AdminOrderQuery"; 
 
 const AppContent = () => {
   const { auth } = useAuth();
@@ -39,6 +40,16 @@ const AppContent = () => {
             <UserRoute>
               <AdminRoute>
                 <AdminUserQueryPage />
+              </AdminRoute>
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/admin/order-query" 
+          element={
+            <UserRoute>
+              <AdminRoute>
+                <AdminOrderQueryPage />
               </AdminRoute>
             </UserRoute>
           }

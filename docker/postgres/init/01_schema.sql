@@ -94,7 +94,7 @@ CREATE TABLE pool_cue_orders (
     ON UPDATE CASCADE
     ON DELETE CASCADE,
   CONSTRAINT chk_pool_cue_orders_status
-    CHECK (status IN ('submitted'))
+    CHECK (status IN ('submitted', 'processing', 'shipped', 'completed', 'cancelled'))
 );
 
 CREATE INDEX idx_pool_cue_orders_user_id ON pool_cue_orders (user_id);

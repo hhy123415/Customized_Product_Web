@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   LogIn,
   LayoutDashboard,
+  ClipboardList,  // 添加订单图标
 } from "lucide-react";
 import styles from "../css/Home.module.css";
 import LoginStyle from "../css/LoginTip.module.css";
@@ -45,7 +46,7 @@ function Home() {
             </p>
             <p className={styles.subtitle}>
               {auth.role === "admin"
-                ? "管理员可在这里处理用户信息查询。"
+                ? "管理员可在这里处理用户信息查询和订单管理。"
                 : "请选择你要使用的功能模块。"}
             </p>
           </div>
@@ -62,6 +63,16 @@ function Home() {
                     style={{ marginRight: "8px", verticalAlign: "middle" }}
                   />
                   查询用户信息
+                </Link>
+                <Link
+                  to="/admin/order-query"
+                  className={`${styles.menuBtn} ${styles.adminTheme}`}
+                >
+                  <ClipboardList
+                    size={20}
+                    style={{ marginRight: "8px", verticalAlign: "middle" }}
+                  />
+                  查询订单信息
                 </Link>
               </>
             )}

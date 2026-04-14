@@ -10,7 +10,6 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import axios from "axios";
-import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
@@ -185,16 +184,10 @@ const SECRET_KEY = process.env.JWT_SECRET || "";
 /** 各字段长度限制常量 */
 const MAX_BIO_LENGTH = 500; // 个人简介最大长度
 const MAX_WORK_DESCRIPTION_LENGTH = 200; // 作品描述最大长度
-const MAX_PRODUCT_NAME_LENGTH = 120; // 产品名称最大长度
-const MAX_PRODUCT_SUMMARY_LENGTH = 1000; // 产品摘要最大长度
-const MAX_REVIEW_COMMENT_LENGTH = 500; // 审核评论最大长度
 const MAX_ORDER_CONTACT_NAME_LENGTH = 80; // 订单联系人姓名最大长度
 const MAX_ORDER_CONTACT_PHONE_LENGTH = 30; // 订单联系电话最大长度
 const MAX_ORDER_SHIPPING_ADDRESS_LENGTH = 500; // 订单配送地址最大长度
 const MAX_ORDER_NOTE_LENGTH = 500; // 订单备注最大长度
-const MAX_PARAMETER_COUNT = 20; // 产品参数最大数量
-const MAX_PARAMETER_NAME_LENGTH = 50; // 参数名称最大长度
-const MAX_PARAMETER_OPTION_COUNT = 20; // 下拉选项最大数量
 
 // ==================== 辅助函数 ====================
 
@@ -439,6 +432,93 @@ app.get(
       });
     } catch (err) {
       console.error("admin users query error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+/**
+ * GET /api/admin/orders
+ * 管理员获取订单列表（支持搜索）
+ * 需要管理员权限
+ */
+app.get(
+  "/api/admin/orders",
+  authenticateToken,
+  authenticateAdmin,
+  async (req: Request, res: Response) => {
+    const rawKeyword = req.query.keyword;
+    const keyword =
+      typeof rawKeyword === "string"
+        ? rawKeyword.trim().slice(0, 100)
+        : Array.isArray(rawKeyword)
+          ? String(rawKeyword[0] ?? "")
+              .trim()
+              .slice(0, 100)
+          : "";
+
+    try {
+      const orders = await db.getOrdersForAdmin(keyword, 100);
+      return res.json({
+        success: true,
+        orders,
+      });
+    } catch (err) {
+      console.error("admin orders query error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+/**
+ * PATCH /api/admin/orders/:orderId/status
+ * 管理员更新订单状态
+ * 需要管理员权限
+ */
+app.patch(
+  "/api/admin/orders/:orderId/status",
+  authenticateToken,
+  authenticateAdmin,
+  async (req: Request, res: Response) => {
+    const orderId = Array.isArray(req.params.orderId)
+      ? req.params.orderId[0]
+      : req.params.orderId;
+    const { status } = req.body;
+
+    const validStatuses = [
+      "submitted",
+      "processing",
+      "shipped",
+      "completed",
+      "cancelled",
+    ];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status",
+      });
+    }
+
+    try {
+      const order = await db.updateOrderStatus(orderId, status);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found",
+        });
+      }
+      return res.json({
+        success: true,
+        order,
+      });
+    } catch (err) {
+      console.error("admin order status update error:", err);
       return res.status(500).json({
         success: false,
         message: "Internal server error",

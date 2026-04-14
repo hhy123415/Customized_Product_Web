@@ -126,3 +126,20 @@ export interface PoolCueOrderRow {
   created_at: string;
   updated_at: string;
 }
+
+export interface AdminOrderRow {
+  order_id: string;
+  user_id: string;
+  username: string | null;
+  product_name: string;
+  configuration: unknown;
+  pricing_lines: unknown[];
+  total_price: number;
+  contact_name: string;
+  contact_phone: string;
+  shipping_address: string;
+  order_note: string | null;
+  status: "submitted" | "processing" | "shipped" | "completed" | "cancelled";
+  created_at: string;
+  updated_at: string;
+}
