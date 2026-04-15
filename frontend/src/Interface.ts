@@ -65,40 +65,6 @@ export interface Comment {
   author_img_path?: string | null;
 }
 
-export interface PoolCueOrder {
-  order_id: string;
-  user_id: string;
-  product_name: string;
-  configuration: {
-    lengthCm: number;
-    weightOz: number;
-    tipDiameterMm: number;
-    jointType: "stainless-steel" | "titanium";
-    wrapType: "carbon-grip" | "genuine-leather" | "none";
-    finishStyle:
-      | "matte-carbon"
-      | "gloss-carbon"
-      | "stealth-black"
-      | "ice-silver"
-      | "ocean-blue"
-      | "crimson-red";
-    caseOption: "none" | "basic" | "pro";
-    includeLaserEngraving: boolean;
-  };
-  pricing_lines: {
-    label: string;
-    amount: number;
-  }[];
-  total_price: number;
-  contact_name: string;
-  contact_phone: string;
-  shipping_address: string;
-  order_note: string | null;
-  status: "submitted";
-  created_at: string;
-  updated_at: string;
-}
-
 export interface AdminOrder {
   order_id: string;
   user_id: string;

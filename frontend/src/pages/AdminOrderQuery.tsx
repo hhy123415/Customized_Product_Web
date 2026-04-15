@@ -3,11 +3,15 @@ import api from "../api/axios";
 import type { AdminOrder } from "../Interface";
 import styles from "../css/AdminUserQuery.module.css"; // 复用相同样式
 
+interface OrderConfiguration {
+  [key: string]: string | number | boolean | OrderConfiguration;
+}
+
 interface PoolCueOrder {
   order_id: string;
   user_id: string;
   product_name: string;
-  configuration: unknown;
+  configuration: OrderConfiguration;
   pricing_lines: unknown[];
   total_price: number;
   contact_name: string;
@@ -40,6 +44,70 @@ const statusStyleMap: Record<PoolCueOrder["status"], string> = {
   shipped: styles.statusShipped,
   completed: styles.statusCompleted,
   cancelled: styles.statusCancelled,
+};
+
+const CONFIG_TRANSLATION: Record<string, string> = {
+  // 键的翻译 (Keys)
+  lengthcm: "长度(厘米)",
+  weightoz: "重量(盎司)",
+  wraptype: "握把类型",
+  jointtype: "接牙类型",
+  caseoption: "球杆盒",
+  finishstyle: "表面涂装",
+  tipdiametermm: "皮头直径",
+  includelaserengraving: "激光刻字",
+
+  // 值的翻译 (Values)
+  "stainless-steel": "不锈钢",
+  titanium: "钛合金",
+  "carbon-grip": "碳纤维防滑",
+  "genuine-leather": "真皮",
+  none: "无",
+  basic: "基础软包",
+  pro: "专业硬壳",
+  true: "是",
+  false: "否",
+  "matte-carbon":"磨砂碳纹",
+  "gloss-carbon":"高亮碳纹",
+  "stealth-black":"隐形黑",
+  "ice-silver":"冰川银",
+  "ocean-blue":"海洋蓝",
+  "crimson-red":"深红",
+};
+
+/**
+ * 翻译工具函数
+ * @param text 原始英文单词
+ * @returns 翻译后的中文，如果没有对应翻译则返回原词
+ */
+const t = (text: string | number | boolean): string => {
+  const key = String(text).toLowerCase();
+  return CONFIG_TRANSLATION[key] || String(text);
+};
+
+const RenderConfiguration = ({ config }: { config: OrderConfiguration }) => {
+  if (!config || typeof config !== "object") return null;
+
+  return (
+    <div className={styles.configContainer}>
+      {Object.entries(config).map(([key, value]) => (
+        <div key={key} className={styles.configItem}>
+          {/* 翻译键 (Label) */}
+          <span className={styles.configLabel}>{t(key)}:</span>
+
+          <span className={styles.configValue}>
+            {typeof value === "object" ? (
+              // 如果是嵌套对象，递归调用或格式化显示
+              <RenderConfiguration config={value as OrderConfiguration} />
+            ) : (
+              // 翻译值 (Value)
+              t(value)
+            )}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 function AdminOrderQueryPage() {
@@ -179,6 +247,12 @@ function AdminOrderQueryPage() {
                       <p className={styles.meta}>
                         <strong>产品:</strong> {order.product_name}
                       </p>
+                      <div className={styles.configSection}>
+                        <strong>定制参数:</strong>
+                        <RenderConfiguration
+                          config={order.configuration as OrderConfiguration}
+                        />
+                      </div>
                       <p className={styles.meta}>
                         <strong>客户:</strong> {order.contact_name} (
                         {order.username || order.user_id})

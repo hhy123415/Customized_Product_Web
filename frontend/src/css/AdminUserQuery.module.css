@@ -14,7 +14,9 @@
   background: var(--color-white);
   border: 1px solid var(--color-gray-200);
   border-radius: var(--radius-2xl); /* 更圆润的转角 */
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.05),
+    0 8px 10px -6px rgba(0, 0, 0, 0.05);
   padding: var(--space-10); /* 增加内边距 */
 }
 
@@ -68,7 +70,9 @@
   font-size: var(--text-base);
   cursor: pointer;
   font-weight: var(--font-bold);
-  transition: transform 0.1s active, opacity 0.2s;
+  transition:
+    transform 0.1s active,
+    opacity 0.2s;
 }
 
 .searchBtn {
@@ -93,7 +97,10 @@
 /* 列表改为宽敞的 Grid 布局 */
 .list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr)); /* 宽屏双列，窄屏单列 */
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(450px, 1fr)
+  ); /* 宽屏双列，窄屏单列 */
   gap: var(--space-6);
 }
 
@@ -212,4 +219,40 @@
   .resetBtn {
     width: 100%;
   }
+}
+
+.configSection {
+  margin: 8px 0;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  font-size: 0.9rem;
+}
+
+.configContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.configItem {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.configLabel {
+  color: #666;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.configValue {
+  color: #007bff;
+  font-weight: 600;
 }
