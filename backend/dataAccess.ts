@@ -205,6 +205,7 @@ export const db = {
           o.user_id,
           u.username,
           o.product_name,
+          o.customization_mode,
           o.configuration,
           o.pricing_lines,
           o.total_price,
@@ -212,6 +213,8 @@ export const db = {
           o.contact_phone,
           o.shipping_address,
           o.order_note,
+          o.design_image_path,
+          o.design_description,
           o.status,
           o.created_at,
           o.updated_at
@@ -232,6 +235,7 @@ export const db = {
         o.user_id,
         u.username,
         o.product_name,
+        o.customization_mode,
         o.configuration,
         o.pricing_lines,
         o.total_price,
@@ -239,6 +243,8 @@ export const db = {
         o.contact_phone,
         o.shipping_address,
         o.order_note,
+        o.design_image_path,
+        o.design_description,
         o.status,
         o.created_at,
         o.updated_at
@@ -272,6 +278,7 @@ export const db = {
         user_id,
         (SELECT username FROM users WHERE user_id = pool_cue_orders.user_id) as username,
         product_name,
+        customization_mode,
         configuration,
         pricing_lines,
         total_price,
@@ -279,6 +286,8 @@ export const db = {
         contact_phone,
         shipping_address,
         order_note,
+        design_image_path,
+        design_description,
         status,
         created_at,
         updated_at
@@ -298,6 +307,9 @@ export const db = {
     contactPhone: string;
     shippingAddress: string;
     orderNote: string | null;
+    customizationMode: PoolCueOrderRow["customization_mode"];
+    designImagePath: string | null;
+    designDescription: string | null;
   }): Promise<PoolCueOrderRow> {
     const {
       userId,
@@ -309,6 +321,9 @@ export const db = {
       contactPhone,
       shippingAddress,
       orderNote,
+      customizationMode,
+      designImagePath,
+      designDescription,
     } = params;
 
     const result = await pool.query<PoolCueOrderRow>(
@@ -316,6 +331,7 @@ export const db = {
         INSERT INTO pool_cue_orders (
           user_id,
           product_name,
+          customization_mode,
           configuration,
           pricing_lines,
           total_price,
@@ -323,13 +339,16 @@ export const db = {
           contact_phone,
           shipping_address,
           order_note,
+          design_image_path,
+          design_description,
           status
         )
-        VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, $8, $9, 'submitted')
+        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, 'submitted')
         RETURNING
           order_id,
           user_id,
           product_name,
+          customization_mode,
           configuration,
           pricing_lines,
           total_price,
@@ -337,6 +356,8 @@ export const db = {
           contact_phone,
           shipping_address,
           order_note,
+          design_image_path,
+          design_description,
           status,
           created_at,
           updated_at
@@ -344,6 +365,7 @@ export const db = {
       [
         userId,
         productName,
+        customizationMode,
         JSON.stringify(configuration),
         JSON.stringify(pricingLines),
         totalPrice,
@@ -351,6 +373,8 @@ export const db = {
         contactPhone,
         shippingAddress,
         orderNote,
+        designImagePath,
+        designDescription,
       ],
     );
 

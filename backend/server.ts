@@ -16,7 +16,12 @@ import multer from "multer";
 import nodemailer from "nodemailer";
 import { authenticateAdmin, authenticateToken } from "./auth";
 import { db } from "./dataAccess";
-import type { PoolCueOrderConfig, PoolCueOrderPriceLine } from "./Interface";
+import type {
+  PoolCueCustomizationMode,
+  PoolCueOrderConfig,
+  PoolCueOrderPriceLine,
+  PoolCuePresetOrderConfig,
+} from "./Interface";
 
 // ==================== 环境配置 ====================
 
@@ -180,6 +185,8 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 
 /** JWT 密钥 */
 const SECRET_KEY = process.env.JWT_SECRET || "";
+const MAX_FREEFORM_DESCRIPTION_LENGTH = 2000;
+const MAX_FREEFORM_TEXT_LENGTH = 120;
 
 /** 各字段长度限制常量 */
 const MAX_BIO_LENGTH = 500; // 个人简介最大长度
@@ -197,7 +204,9 @@ const MAX_ORDER_NOTE_LENGTH = 500; // 订单备注最大长度
  * @returns {PoolCueOrderConfig} 验证后的配置对象
  * @throws {Error} 当配置无效时抛出错误
  */
-const normalizePoolCueConfig = (input: unknown): PoolCueOrderConfig => {
+const normalizePoolCuePresetConfig = (
+  input: unknown,
+): PoolCuePresetOrderConfig => {
   if (!input || typeof input !== "object") {
     throw new Error("config is required");
   }
@@ -262,13 +271,14 @@ const normalizePoolCueConfig = (input: unknown): PoolCueOrderConfig => {
   }
 
   return {
+    customizationMode: "preset",
     lengthCm,
     weightOz,
     tipDiameterMm,
-    jointType: jointType as PoolCueOrderConfig["jointType"],
-    wrapType: wrapType as PoolCueOrderConfig["wrapType"],
-    finishStyle: finishStyle as PoolCueOrderConfig["finishStyle"],
-    caseOption: caseOption as PoolCueOrderConfig["caseOption"],
+    jointType: jointType as PoolCuePresetOrderConfig["jointType"],
+    wrapType: wrapType as PoolCuePresetOrderConfig["wrapType"],
+    finishStyle: finishStyle as PoolCuePresetOrderConfig["finishStyle"],
+    caseOption: caseOption as PoolCuePresetOrderConfig["caseOption"],
     includeLaserEngraving,
   };
 };
@@ -279,79 +289,80 @@ const normalizePoolCueConfig = (input: unknown): PoolCueOrderConfig => {
  * @returns {Object} 包含价格明细和总价的对象
  */
 const calculatePoolCuePrice = (
-  config: PoolCueOrderConfig,
+  config: PoolCuePresetOrderConfig,
 ): { lines: PoolCueOrderPriceLine[]; total: number } => {
   const lines: PoolCueOrderPriceLine[] = [
-    { label: "碳纤维基础杆体", amount: 1880 },
+    { label: "基础杆体", amount: 1880 },
     {
-      label: `长度调整（${config.lengthCm}cm）`,
+      label: `长度调整(${config.lengthCm}cm)`,
       amount: (config.lengthCm - 147) * 26,
     },
     {
-      label: `重量调整（${config.weightOz}oz）`,
+      label: `重量调整(${config.weightOz}oz)`,
       amount: Math.round((config.weightOz - 19) * 80),
-    },
-    {
-      label: `接牙类型：${config.jointType === "titanium" ? "钛合金" : "不锈钢"}`,
-      amount: config.jointType === "titanium" ? 320 : 180,
-    },
-    {
-      label:
-        config.wrapType === "genuine-leather"
-          ? "握把：真皮"
-          : config.wrapType === "none"
-            ? "握把：无缠把"
-            : "握把：碳纤维防滑握把",
-      amount:
-        config.wrapType === "genuine-leather"
-          ? 280
-          : config.wrapType === "none"
-            ? 0
-            : 160,
-    },
-    {
-      label:
-        config.finishStyle === "gloss-carbon"
-          ? "涂装：高亮碳纹"
-          : config.finishStyle === "stealth-black"
-            ? "涂装：隐形黑"
-            : config.finishStyle === "ice-silver"
-              ? "涂装：冰川银"
-              : config.finishStyle === "ocean-blue"
-                ? "涂装：海洋蓝"
-                : config.finishStyle === "crimson-red"
-                  ? "涂装：深红"
-                  : "涂装：磨砂碳纹",
-      amount:
-        config.finishStyle === "matte-carbon"
-          ? 0
-          : config.finishStyle === "ice-silver" ||
-              config.finishStyle === "ocean-blue"
-            ? 280
-            : 260,
-    },
-    {
-      label:
-        config.caseOption === "none"
-          ? "球杆盒：不选择"
-          : config.caseOption === "pro"
-            ? "球杆盒：专业硬壳"
-            : "球杆盒：基础软包",
-      amount:
-        config.caseOption === "none"
-          ? 0
-          : config.caseOption === "pro"
-            ? 460
-            : 180,
     },
   ];
 
-  // 激光刻字额外收费
+  // 钛合金接牙
+  if (config.jointType === "titanium") {
+    lines.push({ label: "钛合金接牙", amount: 320 });
+  }
+
+  // 真皮握把
+  if (config.wrapType === "genuine-leather") {
+    lines.push({ label: "真皮握把", amount: 280 });
+  }
+
+  // 特殊涂装（非磨砂碳纹）
+  if (config.finishStyle !== "matte-carbon") {
+    lines.push({ label: "特殊涂装", amount: 260 });
+  }
+
+  // 专业硬壳盒
+  if (config.caseOption === "pro") {
+    lines.push({ label: "专业硬壳盒", amount: 460 });
+  }
+
+  // 激光刻字
   if (config.includeLaserEngraving) {
     lines.push({ label: "激光刻字", amount: 160 });
   }
 
   return {
+    lines,
+    total: lines.reduce((sum, item) => sum + item.amount, 0),
+  };
+};
+
+const buildFreeformPoolCueOrder = (params: {
+  designDescription: string;
+  preferredText: string | null;
+  referenceImagePath: string | null;
+}): {
+  config: PoolCueOrderConfig;
+  lines: PoolCueOrderPriceLine[];
+  total: number;
+} => {
+  const { designDescription, preferredText, referenceImagePath } = params;
+  const lines: PoolCueOrderPriceLine[] = [
+    { label: "碳纤维球杆自由定制基础方案", amount: 2280 },
+  ];
+
+  if (referenceImagePath) {
+    lines.push({ label: "设计图解析与工艺评估", amount: 180 });
+  }
+
+  if (preferredText) {
+    lines.push({ label: "文字元素排版预处理", amount: 120 });
+  }
+
+  return {
+    config: {
+      customizationMode: "freeform",
+      designDescription,
+      preferredText,
+      referenceImagePath,
+    },
     lines,
     total: lines.reduce((sum, item) => sum + item.amount, 0),
   };
@@ -540,17 +551,14 @@ app.post(
     const userId = req.user?.user_id;
     const {
       config,
+      customization_mode,
       contact_name,
       contact_phone,
       shipping_address,
       order_note,
-    } = req.body as {
-      config?: unknown;
-      contact_name?: string;
-      contact_phone?: string;
-      shipping_address?: string;
-      order_note?: string | null;
-    };
+      design_image_path,
+      design_description,
+    } = req.body;
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -560,6 +568,10 @@ app.post(
     const contactPhone = String(contact_phone || "").trim();
     const shippingAddress = String(shipping_address || "").trim();
     const orderNote = String(order_note || "").trim();
+    const customizationMode =
+      customization_mode === "freeform" ? "freeform" : "preset";
+    const designImagePath = String(design_image_path || "").trim();
+    const designDescription = String(design_description || "").trim();
 
     // 验证必填字段
     if (!contactName) {
@@ -605,19 +617,55 @@ app.post(
         .json({ success: false, message: "order_note is too long" });
     }
 
+    if (designImagePath && !designImagePath.startsWith("/uploads/")) {
+      return res.status(400).json({
+        success: false,
+        message: "design_image_path must be under /uploads/",
+      });
+    }
+
+    if (designDescription.length > MAX_FREEFORM_DESCRIPTION_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: "design_description is too long",
+      });
+    }
+
     try {
-      const normalizedConfig = normalizePoolCueConfig(config);
-      const pricing = calculatePoolCuePrice(normalizedConfig);
+      let orderPayload: any;
+
+      if (customization_mode === "freeform") {
+        // 自由化定制逻辑
+        orderPayload = {
+          configuration: {}, // 传空对象满足 PoolCueOrderConfig 类型
+          pricingLines: [], // 补全缺失的 pricingLines
+          totalPrice: 0, // 数据库设计可能不允许 null，传 0 表示待报价
+          designImagePath: design_image_path || null,
+          designDescription: design_description || null,
+        };
+      } else {
+        // 参数化定制逻辑
+        const pricing = calculatePoolCuePrice(config);
+        orderPayload = {
+          configuration: config,
+          pricingLines: pricing.lines, // 补全缺失的 pricingLines
+          totalPrice: pricing.total,
+          designImagePath: null,
+          designDescription: null,
+        };
+      }
+
+      // 调用 db 接口时补全 productName 并展开 orderPayload
       const order = await db.createPoolCueOrder({
         userId,
-        productName: "碳纤维台球杆",
-        configuration: normalizedConfig,
-        pricingLines: pricing.lines,
-        totalPrice: pricing.total,
-        contactName,
-        contactPhone,
-        shippingAddress,
-        orderNote: orderNote || null,
+        productName: "碳纤维台球杆", // 补全缺失的 productName
+        contactName: contact_name,
+        contactPhone: contact_phone,
+        shippingAddress: shipping_address,
+        orderNote: order_note || null,
+        customizationMode:
+          customization_mode === "freeform" ? "freeform" : "preset",
+        ...orderPayload,
       });
 
       return res.status(201).json({

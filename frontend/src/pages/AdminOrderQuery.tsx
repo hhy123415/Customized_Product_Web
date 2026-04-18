@@ -11,6 +11,7 @@ interface PoolCueOrder {
   order_id: string;
   user_id: string;
   product_name: string;
+  customization_mode: "preset" | "freeform";
   configuration: OrderConfiguration;
   pricing_lines: unknown[];
   total_price: number;
@@ -18,6 +19,8 @@ interface PoolCueOrder {
   contact_phone: string;
   shipping_address: string;
   order_note: string | null;
+  design_image_path: string | null;
+  design_description: string | null;
   status: "submitted" | "processing" | "shipped" | "completed" | "cancelled";
   created_at: string;
   updated_at: string;
@@ -55,7 +58,6 @@ const CONFIG_TRANSLATION: Record<string, string> = {
   caseoption: "球杆盒",
   finishstyle: "表面涂装",
   tipdiametermm: "皮头直径",
-  includelaserengraving: "激光刻字",
 
   // 值的翻译 (Values)
   "stainless-steel": "不锈钢",
@@ -69,10 +71,7 @@ const CONFIG_TRANSLATION: Record<string, string> = {
   false: "否",
   "matte-carbon":"磨砂碳纹",
   "gloss-carbon":"高亮碳纹",
-  "stealth-black":"隐形黑",
-  "ice-silver":"冰川银",
   "ocean-blue":"海洋蓝",
-  "crimson-red":"深红",
 };
 
 /**
@@ -228,32 +227,75 @@ function AdminOrderQueryPage() {
                 <p className={styles.empty}>没有匹配的订单。</p>
               ) : (
                 orders.map((order) => (
-                  <article key={order.order_id} className={styles.item}>
-                    <div className={styles.itemMain}>
+                  <article 
+                    key={order.order_id} 
+                    className={styles.item}
+                    style={{ display: "flex", gap: "20px", alignItems: "flex-start" }} // 新增：左右布局
+                  >
+                    {/* 左侧：图片展示区 */}
+                    <div style={{ width: "160px", flexShrink: 0 }}>
+                      {order.customization_mode === "preset" ? (
+                        <img 
+                          src="/preset_example.jpg" 
+                          alt="默认参数球杆" 
+                          style={{ width: "100%", height: "auto", borderRadius: "8px", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <img 
+                          src={order.design_image_path || "/images/placeholder.jpg"} 
+                          alt="自由定制设计图" 
+                          style={{ width: "100%", height: "auto", borderRadius: "8px", objectFit: "cover" }}
+                        />
+                      )}
+                    </div>
+
+                    {/* 右侧：订单详情区 */}
+                    <div className={styles.itemMain} style={{ flex: 1 }}>
                       <div className={styles.orderHeader}>
                         <p className={styles.name}>
                           订单 #{order.order_id.slice(-8).toUpperCase()}
+                          {/* 新增：显示订单类型标签 */}
+                          <span style={{ fontSize: "12px", background: "#eee", padding: "2px 6px", borderRadius: "4px", marginLeft: "8px" }}>
+                            {order.customization_mode === "preset" ? "参数定制" : "自由定制"}
+                          </span>
                           <span
                             className={`${styles.status} ${statusStyleMap[order.status]}`}
                           >
                             {statusTextMap[order.status]}
                           </span>
                         </p>
-                        <p className={styles.price}>
-                          ¥{order.total_price.toFixed(2)}
-                        </p>
+                        
+                        {/* 仅 Preset 订单显示价格 */}
+                        {order.customization_mode === "preset" && (
+                          <p className={styles.price}>
+                            ¥{order.total_price.toFixed(2)}
+                          </p>
+                        )}
                       </div>
 
                       <p className={styles.meta}>
                         <strong>产品:</strong> {order.product_name}
                       </p>
-                      <div className={styles.configSection}>
-                        <strong>定制参数:</strong>
-                        <RenderConfiguration
-                          config={order.configuration as OrderConfiguration}
-                        />
-                      </div>
-                      <p className={styles.meta}>
+
+                      {/* 差异化显示：配置 vs 描述 */}
+                      {order.customization_mode === "preset" ? (
+                        <div className={styles.configSection}>
+                          <strong>定制参数:</strong>
+                          <RenderConfiguration
+                            config={order.configuration as OrderConfiguration}
+                          />
+                        </div>
+                      ) : (
+                        <div className={styles.configSection} style={{ background: "#f9f9f9", padding: "10px", borderRadius: "6px" }}>
+                          <strong>定制描述:</strong>
+                          <p style={{ marginTop: "4px", whiteSpace: "pre-wrap", color: "#444" }}>
+                            {order.design_description || "客户未填写描述"}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* 公共联系人信息 */}
+                      <p className={styles.meta} style={{ marginTop: "12px" }}>
                         <strong>客户:</strong> {order.contact_name} (
                         {order.username || order.user_id})
                       </p>

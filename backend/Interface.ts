@@ -87,7 +87,10 @@ export interface EmailVerificationCodeRow {
   user_agent?: string | null;
 }
 
-export interface PoolCueOrderConfig {
+export type PoolCueCustomizationMode = "preset" | "freeform";
+
+export interface PoolCuePresetOrderConfig {
+  customizationMode: "preset";
   lengthCm: number;
   weightOz: number;
   tipDiameterMm: number;
@@ -104,6 +107,17 @@ export interface PoolCueOrderConfig {
   includeLaserEngraving: boolean;
 }
 
+export interface PoolCueFreeformOrderConfig {
+  customizationMode: "freeform";
+  designDescription: string;
+  preferredText: string | null;
+  referenceImagePath: string | null;
+}
+
+export type PoolCueOrderConfig =
+  | PoolCuePresetOrderConfig
+  | PoolCueFreeformOrderConfig;
+
 export interface PoolCueOrderPriceLine {
   label: string;
   amount: number;
@@ -115,6 +129,7 @@ export interface PoolCueOrderRow {
   order_id: string;
   user_id: string;
   product_name: string;
+  customization_mode: PoolCueCustomizationMode;
   configuration: PoolCueOrderConfig;
   pricing_lines: PoolCueOrderPriceLine[];
   total_price: number;
@@ -122,6 +137,8 @@ export interface PoolCueOrderRow {
   contact_phone: string;
   shipping_address: string;
   order_note: string | null;
+  design_image_path: string | null;
+  design_description: string | null;
   status: PoolCueOrderStatus;
   created_at: string;
   updated_at: string;
@@ -132,6 +149,7 @@ export interface AdminOrderRow {
   user_id: string;
   username: string | null;
   product_name: string;
+  customization_mode: PoolCueCustomizationMode;
   configuration: unknown;
   pricing_lines: unknown[];
   total_price: number;
@@ -139,6 +157,8 @@ export interface AdminOrderRow {
   contact_phone: string;
   shipping_address: string;
   order_note: string | null;
+  design_image_path: string | null;
+  design_description: string | null;
   status: "submitted" | "processing" | "shipped" | "completed" | "cancelled";
   created_at: string;
   updated_at: string;
