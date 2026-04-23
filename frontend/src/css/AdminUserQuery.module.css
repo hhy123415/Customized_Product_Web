@@ -1,6 +1,5 @@
 @import "./variables.css";
 
-/* 整体页面背景微调，增加层次感 */
 .page {
   padding: var(--space-10) var(--space-6);
   display: flex;
@@ -10,19 +9,19 @@
 }
 
 .card {
-  width: min(1200px, 100%); /* 调宽最大宽度 */
+  width: min(1200px, 100%);
   background: var(--color-white);
   border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-2xl); /* 更圆润的转角 */
+  border-radius: var(--radius-2xl);
   box-shadow:
     0 10px 25px -5px rgba(0, 0, 0, 0.05),
     0 8px 10px -6px rgba(0, 0, 0, 0.05);
-  padding: var(--space-10); /* 增加内边距 */
+  padding: var(--space-10);
 }
 
 .title {
   margin: 0;
-  font-size: var(--text-4xl); /* 增大标题 */
+  font-size: var(--text-4xl);
   letter-spacing: -0.025em;
   color: var(--color-gray-900);
   font-weight: 800;
@@ -34,7 +33,6 @@
   font-size: var(--text-lg);
 }
 
-/* 搜索栏布局优化 */
 .searchBar {
   display: flex;
   gap: var(--space-4);
@@ -71,8 +69,8 @@
   cursor: pointer;
   font-weight: var(--font-bold);
   transition:
-    transform 0.1s active,
-    opacity 0.2s;
+    transform 0.1s ease,
+    opacity 0.2s ease;
 }
 
 .searchBtn {
@@ -81,9 +79,24 @@
   box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.2);
 }
 
-.searchBtn:hover {
+.resetBtn {
+  color: var(--color-gray-700);
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+}
+
+.searchBtn:hover,
+.resetBtn:hover {
   opacity: 0.95;
   transform: translateY(-1px);
+}
+
+.searchBtn:disabled,
+.resetBtn:disabled,
+.actionBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
 }
 
 .resultMeta {
@@ -94,13 +107,33 @@
   padding-bottom: var(--space-3);
 }
 
-/* 列表改为宽敞的 Grid 布局 */
+.tip,
+.error,
+.empty {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+}
+
+.tip {
+  background: rgba(var(--color-primary-rgb), 0.08);
+  color: var(--color-primary-dark);
+}
+
+.error {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.empty {
+  background: var(--color-gray-50);
+  color: var(--color-gray-500);
+}
+
 .list {
   display: grid;
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(450px, 1fr)
-  ); /* 宽屏双列，窄屏单列 */
+  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
   gap: var(--space-6);
 }
 
@@ -131,6 +164,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .role {
@@ -146,7 +181,7 @@
 .meta {
   margin: 0;
   color: var(--color-gray-600);
-  font-size: var(--text-base); /* 提高可读性 */
+  font-size: var(--text-base);
   line-height: 1.6;
 }
 
@@ -155,11 +190,11 @@
   margin-right: var(--space-1);
 }
 
-/* 订单特定样式优化 */
 .orderHeader {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: var(--space-4);
   margin-bottom: var(--space-4);
 }
 
@@ -167,6 +202,7 @@
   font-size: var(--text-2xl);
   color: var(--color-primary-dark);
   font-weight: 800;
+  margin: 0;
 }
 
 .status {
@@ -175,50 +211,54 @@
   border-radius: var(--radius-lg);
 }
 
+.statusSubmitted {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.statusProcessing {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.statusShipped {
+  background: #ecfeff;
+  color: #0f766e;
+}
+
+.statusCompleted {
+  background: #ecfdf5;
+  color: #15803d;
+}
+
+.statusCancelled {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 .statusActions {
   display: flex;
   gap: var(--space-3);
   margin-top: var(--space-5);
   padding-top: var(--space-5);
-  border-top: 1px dashed var(--color-gray-200); /* 改为虚线更有设计感 */
+  border-top: 1px dashed var(--color-gray-200);
 }
 
 .actionBtn {
-  flex: 1; /* 按钮平分宽度 */
+  flex: 1;
   padding: var(--space-3);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  background: var(--gradient-primary);
+  color: var(--color-white);
+  font-weight: var(--font-bold);
 }
 
-/* 响应式调整 */
-@media (max-width: 1024px) {
-  .list {
-    grid-template-columns: 1fr; /* 中等屏幕回归单列 */
-  }
-}
-
-@media (max-width: 768px) {
-  .page {
-    padding: var(--space-4);
-  }
-
-  .card {
-    padding: var(--space-6);
-  }
-
-  .title {
-    font-size: var(--text-3xl);
-  }
-
-  .searchBar {
-    flex-direction: column;
-  }
-
-  .searchBtn,
-  .resetBtn {
-    width: 100%;
-  }
+.danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
 .configSection {
@@ -255,4 +295,49 @@
 .configValue {
   color: #007bff;
   font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+  .list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: var(--space-4);
+  }
+
+  .card {
+    padding: var(--space-6);
+  }
+
+  .title {
+    font-size: var(--text-3xl);
+  }
+
+  .searchBar {
+    flex-direction: column;
+  }
+
+  .searchInput {
+    min-width: 0;
+  }
+
+  .searchBtn,
+  .resetBtn {
+    width: 100%;
+  }
+
+  .item {
+    padding: var(--space-4);
+  }
+
+  .orderHeader {
+    flex-direction: column;
+  }
+
+  .statusActions {
+    flex-direction: column;
+  }
 }

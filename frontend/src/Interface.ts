@@ -5,6 +5,7 @@ export interface User_info {
   role: string;
   img_path?: string | null;
   bio?: string;
+  is_certified_designer: boolean;
 }
 
 export interface UserWork {

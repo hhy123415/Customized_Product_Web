@@ -80,6 +80,16 @@ function Home() {
             {auth.role === "regular" && (
               <>
                 <Link
+                  to="/my-orders"
+                  className={`${styles.menuBtn} ${styles.userTheme}`}
+                >
+                  <ClipboardList
+                    size={20}
+                    style={{ marginRight: "8px", verticalAlign: "middle" }}
+                  />
+                  我的订单
+                </Link>
+                <Link
                   to="/CreativeSquare"
                   className={`${styles.menuBtn} ${styles.userTheme}`}
                 >

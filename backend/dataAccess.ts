@@ -122,6 +122,7 @@ export const db = {
           role,
           img_path,
           bio,
+          is_certified_designer,
           created_at
         FROM users
         WHERE user_id = $1
@@ -264,6 +265,88 @@ export const db = {
     return result.rows;
   },
 
+  async getOrdersForUser(
+    userId: string,
+    keyword: string,
+    limit: number = 100,
+  ): Promise<AdminOrderRow[]> {
+    const normalizedKeyword = keyword.trim();
+    const wildcard = `%${normalizedKeyword}%`;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.max(1, Math.min(200, Math.floor(limit)))
+      : 100;
+
+    if (!normalizedKeyword) {
+      const result = await pool.query<AdminOrderRow>(
+        `
+        SELECT
+          o.order_id,
+          o.user_id,
+          u.username,
+          o.product_name,
+          o.customization_mode,
+          o.configuration,
+          o.pricing_lines,
+          o.total_price,
+          o.contact_name,
+          o.contact_phone,
+          o.shipping_address,
+          o.order_note,
+          o.design_image_path,
+          o.design_description,
+          o.status,
+          o.created_at,
+          o.updated_at
+        FROM pool_cue_orders o
+        LEFT JOIN users u ON o.user_id = u.user_id
+        WHERE o.user_id = $1
+        ORDER BY o.created_at DESC, o.order_id DESC
+        LIMIT $2
+      `,
+        [userId, safeLimit],
+      );
+      return result.rows;
+    }
+
+    const result = await pool.query<AdminOrderRow>(
+      `
+      SELECT
+        o.order_id,
+        o.user_id,
+        u.username,
+        o.product_name,
+        o.customization_mode,
+        o.configuration,
+        o.pricing_lines,
+        o.total_price,
+        o.contact_name,
+        o.contact_phone,
+        o.shipping_address,
+        o.order_note,
+        o.design_image_path,
+        o.design_description,
+        o.status,
+        o.created_at,
+        o.updated_at
+      FROM pool_cue_orders o
+      LEFT JOIN users u ON o.user_id = u.user_id
+      WHERE
+        o.user_id = $1
+        AND (
+          o.order_id::TEXT ILIKE $2
+          OR o.product_name ILIKE $2
+          OR o.contact_name ILIKE $2
+          OR o.contact_phone ILIKE $2
+          OR o.status::TEXT ILIKE $2
+        )
+      ORDER BY o.created_at DESC, o.order_id DESC
+      LIMIT $3
+    `,
+      [userId, wildcard, safeLimit],
+    );
+    return result.rows;
+  },
+
   async updateOrderStatus(
     orderId: string,
     status: AdminOrderRow["status"],
@@ -293,6 +376,42 @@ export const db = {
         updated_at
     `,
       [status, orderId],
+    );
+    return result.rows[0] || null;
+  },
+
+  async cancelOrderForUser(
+    orderId: string,
+    userId: string,
+  ): Promise<AdminOrderRow | null> {
+    const result = await pool.query<AdminOrderRow>(
+      `
+      UPDATE pool_cue_orders
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE
+        order_id = $1
+        AND user_id = $2
+        AND status IN ('submitted', 'processing')
+      RETURNING
+        order_id,
+        user_id,
+        (SELECT username FROM users WHERE user_id = pool_cue_orders.user_id) as username,
+        product_name,
+        customization_mode,
+        configuration,
+        pricing_lines,
+        total_price,
+        contact_name,
+        contact_phone,
+        shipping_address,
+        order_note,
+        design_image_path,
+        design_description,
+        status,
+        created_at,
+        updated_at
+    `,
+      [orderId, userId],
     );
     return result.rows[0] || null;
   },

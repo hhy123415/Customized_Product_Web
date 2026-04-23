@@ -28,6 +28,7 @@ function MyAccount() {
   const [userInfo, setUserInfo] = useState<User_info | null>(null);
   const [works, setWorks] = useState<UserWork[]>([]);
   const [email, setEmail] = useState<string>("");
+  const [points, setPoints] = useState<number>(0);
   const [bioDraft, setBioDraft] = useState<string>("");
   const [newWorkDescription, setNewWorkDescription] = useState<string>("");
 
@@ -62,6 +63,7 @@ function MyAccount() {
         const myRes = await api.get("/my_info");
         if (myRes.data.success) {
           setEmail(String(myRes.data.user?.email || ""));
+          setPoints(Number(myRes.data.user?.points || 0));
         }
       } else {
         setEmail("");
@@ -100,7 +102,9 @@ function MyAccount() {
       }
 
       const avatarPath = uploadRes.data.path as string;
-      const updateRes = await api.put("/my_info/avatar", { img_path: avatarPath });
+      const updateRes = await api.put("/my_info/avatar", {
+        img_path: avatarPath,
+      });
       if (!updateRes.data?.success) {
         throw new Error(updateRes.data?.message || "头像保存失败");
       }
@@ -203,7 +207,9 @@ function MyAccount() {
   if (error || !userInfo) {
     return (
       <div className={styles.container}>
-        <p className={styles.errorText}>错误: {error || "未能加载用户信息。"}</p>
+        <p className={styles.errorText}>
+          错误: {error || "未能加载用户信息。"}
+        </p>
       </div>
     );
   }
@@ -232,6 +238,17 @@ function MyAccount() {
 
         <p>
           <strong>用户名:</strong> {userInfo.username}
+          {userInfo.is_certified_designer && (
+            <img
+              src="/designer_icon.png"
+              alt="认证设计师"
+              style={{
+                height: "20px", // 根据你的字体大小调整高度
+                marginLeft: "8px",
+                verticalAlign: "middle", // 使图片与文字对齐
+              }}
+            />
+          )}
         </p>
         {isOwner && (
           <p>
@@ -239,7 +256,14 @@ function MyAccount() {
           </p>
         )}
         <p>
-          <strong>账号类型:</strong> {roleDisplayMap[userInfo.role] || userInfo.role}
+          <strong>账号类型:</strong>{" "}
+          {roleDisplayMap[userInfo.role] || userInfo.role}
+        </p>
+        <p>
+          <strong>当前积分:</strong>{" "}
+          <span style={{ color: "#27ae60", fontWeight: "bold" }}>
+            {points ?? 0}
+          </span>
         </p>
 
         <div className={styles.bioBlock}>
@@ -263,7 +287,9 @@ function MyAccount() {
               </button>
             </>
           ) : (
-            <p className={styles.bioText}>{userInfo.bio || "这个人很神秘，暂时没有留下签名。"}</p>
+            <p className={styles.bioText}>
+              {userInfo.bio || "这个人很神秘，暂时没有留下签名。"}
+            </p>
           )}
         </div>
 
@@ -293,7 +319,9 @@ function MyAccount() {
 
           {works.length === 0 ? (
             <p className={styles.emptyText}>
-              {isOwner ? "你还没有上传作品，快来展示一下吧。" : "TA 还没有公开作品。"}
+              {isOwner
+                ? "你还没有上传作品，快来展示一下吧。"
+                : "TA 还没有公开作品。"}
             </p>
           ) : (
             <div className={styles.workGrid}>
@@ -304,7 +332,9 @@ function MyAccount() {
                     alt={work.description || "用户作品"}
                     className={styles.workImage}
                   />
-                  <p className={styles.workMeta}>{formatDate(work.created_at)}</p>
+                  <p className={styles.workMeta}>
+                    {formatDate(work.created_at)}
+                  </p>
                   {work.description && (
                     <p className={styles.workDescription}>{work.description}</p>
                   )}

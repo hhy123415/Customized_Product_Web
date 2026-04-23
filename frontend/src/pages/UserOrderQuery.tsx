@@ -8,21 +8,21 @@ import {
   statusStyleMap,
   statusTextMap,
   type OrderConfiguration,
-  type OrderStatus,
 } from "./orderQueryShared";
 
-function AdminOrderQueryPage() {
+function UserOrderQueryPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [inputKeyword, setInputKeyword] = useState("");
   const [activeKeyword, setActiveKeyword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionOrderId, setActionOrderId] = useState<string | null>(null);
 
   const fetchOrders = async (keyword: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await api.get("/admin/orders", {
+      const response = await api.get("/orders/my", {
         params: { keyword },
       });
 
@@ -33,7 +33,7 @@ function AdminOrderQueryPage() {
 
       setOrders((response.data.orders || []) as AdminOrder[]);
     } catch (err) {
-      console.error("Failed to query orders:", err);
+      console.error("Failed to query user orders:", err);
       setError("无法查询订单信息，请稍后再试。");
     } finally {
       setIsLoading(false);
@@ -57,34 +57,34 @@ function AdminOrderQueryPage() {
     await fetchOrders("");
   };
 
-  const handleStatusUpdate = async (
-    orderId: string,
-    newStatus: OrderStatus,
-  ) => {
+  const handleCancelOrder = async (orderId: string) => {
+    setActionOrderId(orderId);
     try {
-      const response = await api.patch(`/admin/orders/${orderId}/status`, {
-        status: newStatus,
-      });
-
-      if (response.data.success) {
-        setOrders((currentOrders) =>
-          currentOrders.map((order) =>
-            order.order_id === orderId ? { ...order, status: newStatus } : order,
-          ),
-        );
+      const response = await api.patch(`/orders/${orderId}/cancel`);
+      if (!response.data.success) {
+        alert(response.data.message || "取消订单失败");
+        return;
       }
+
+      setOrders((currentOrders) =>
+        currentOrders.map((order) =>
+          order.order_id === orderId ? { ...order, status: "cancelled" } : order,
+        ),
+      );
     } catch (err) {
-      console.error("Failed to update status:", err);
-      alert("状态更新失败");
+      console.error("Failed to cancel order:", err);
+      alert("取消订单失败，请稍后再试");
+    } finally {
+      setActionOrderId(null);
     }
   };
 
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <h1 className={styles.title}>订单信息查询</h1>
+        <h1 className={styles.title}>我的订单</h1>
         <p className={styles.subtitle}>
-          支持按订单 ID、用户名、联系电话、订单状态进行搜索
+          支持按订单 ID、产品名称、联系电话、订单状态查询你自己的订单
         </p>
 
         <form className={styles.searchBar} onSubmit={handleSearch}>
@@ -92,7 +92,7 @@ function AdminOrderQueryPage() {
             type="text"
             value={inputKeyword}
             onChange={(e) => setInputKeyword(e.target.value)}
-            placeholder="输入关键词后搜索"
+            placeholder="输入订单号、产品名、电话或状态"
             className={styles.searchInput}
           />
           <button
@@ -112,7 +112,7 @@ function AdminOrderQueryPage() {
           </button>
         </form>
 
-        {isLoading && <p className={styles.tip}>正在查询订单信息...</p>}
+        {isLoading && <p className={styles.tip}>正在查询你的订单...</p>}
         {error && <p className={styles.error}>{error}</p>}
 
         {!isLoading && !error && (
@@ -123,7 +123,7 @@ function AdminOrderQueryPage() {
             </p>
             <div className={styles.list}>
               {orders.length === 0 ? (
-                <p className={styles.empty}>没有匹配的订单。</p>
+                <p className={styles.empty}>你当前还没有匹配的订单。</p>
               ) : (
                 orders.map((order) => (
                   <article
@@ -222,14 +222,13 @@ function AdminOrderQueryPage() {
                               color: "#444",
                             }}
                           >
-                            {order.design_description || "客户未填写描述"}
+                            {order.design_description || "你还没有填写描述"}
                           </p>
                         </div>
                       )}
 
                       <p className={styles.meta} style={{ marginTop: "12px" }}>
-                        <strong>客户:</strong> {order.contact_name} (
-                        {order.username || order.user_id})
+                        <strong>收货人:</strong> {order.contact_name}
                       </p>
                       <p className={styles.meta}>
                         <strong>电话:</strong> {order.contact_phone}
@@ -245,50 +244,24 @@ function AdminOrderQueryPage() {
                       <p className={styles.meta}>
                         <strong>创建时间:</strong> {formatDate(order.created_at)}
                       </p>
+                      <p className={styles.meta}>
+                        <strong>最后更新:</strong> {formatDate(order.updated_at)}
+                      </p>
 
-                      <div className={styles.statusActions}>
-                        {order.status === "submitted" && (
-                          <button
-                            className={styles.actionBtn}
-                            onClick={() =>
-                              handleStatusUpdate(order.order_id, "processing")
-                            }
-                          >
-                            开始处理
-                          </button>
-                        )}
-                        {order.status === "processing" && (
-                          <button
-                            className={styles.actionBtn}
-                            onClick={() =>
-                              handleStatusUpdate(order.order_id, "shipped")
-                            }
-                          >
-                            标记发货
-                          </button>
-                        )}
-                        {order.status === "shipped" && (
-                          <button
-                            className={styles.actionBtn}
-                            onClick={() =>
-                              handleStatusUpdate(order.order_id, "completed")
-                            }
-                          >
-                            标记完成
-                          </button>
-                        )}
-                        {(order.status === "submitted" ||
-                          order.status === "processing") && (
+                      {(order.status === "submitted" ||
+                        order.status === "processing") && (
+                        <div className={styles.statusActions}>
                           <button
                             className={`${styles.actionBtn} ${styles.danger}`}
-                            onClick={() =>
-                              handleStatusUpdate(order.order_id, "cancelled")
-                            }
+                            onClick={() => handleCancelOrder(order.order_id)}
+                            disabled={actionOrderId === order.order_id}
                           >
-                            取消订单
+                            {actionOrderId === order.order_id
+                              ? "取消中..."
+                              : "取消订单"}
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </article>
                 ))
@@ -301,4 +274,4 @@ function AdminOrderQueryPage() {
   );
 }
 
-export default AdminOrderQueryPage;
+export default UserOrderQueryPage;

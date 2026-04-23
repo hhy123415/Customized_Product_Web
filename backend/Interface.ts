@@ -8,6 +8,7 @@ export interface UserRow {
   role: Role;
   img_path?: string | null;
   bio?: string | null;
+  points?:number;
 }
 
 export interface UserPublicProfileRow {
@@ -16,6 +17,7 @@ export interface UserPublicProfileRow {
   role: Role;
   img_path?: string | null;
   bio?: string | null;
+  is_certified_designer: boolean;
   created_at: string;
 }
 
@@ -104,7 +106,6 @@ export interface PoolCuePresetOrderConfig {
     | "ocean-blue"
     | "crimson-red";
   caseOption: "none" | "basic" | "pro";
-  includeLaserEngraving: boolean;
 }
 
 export interface PoolCueFreeformOrderConfig {
@@ -123,7 +124,12 @@ export interface PoolCueOrderPriceLine {
   amount: number;
 }
 
-export type PoolCueOrderStatus = "submitted";
+export type PoolCueOrderStatus =
+  | "submitted"
+  | "processing"
+  | "shipped"
+  | "completed"
+  | "cancelled";
 
 export interface PoolCueOrderRow {
   order_id: string;

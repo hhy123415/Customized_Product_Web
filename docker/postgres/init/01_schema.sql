@@ -9,6 +9,8 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   email VARCHAR(255) NOT NULL UNIQUE,
   role user_role_enum NOT NULL DEFAULT 'regular',
+  points INTEGER NOT NULL DEFAULT 0,
+  is_certified_designer BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   img_path VARCHAR(255),

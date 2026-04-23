@@ -219,7 +219,6 @@ const normalizePoolCuePresetConfig = (
   const wrapType = String(raw.wrapType || "").trim();
   const finishStyle = String(raw.finishStyle || "").trim();
   const caseOption = String(raw.caseOption || "").trim();
-  const includeLaserEngraving = Boolean(raw.includeLaserEngraving);
 
   // 验证长度范围：142-150cm
   if (!Number.isFinite(lengthCm) || lengthCm < 142 || lengthCm > 150) {
@@ -279,7 +278,6 @@ const normalizePoolCuePresetConfig = (
     wrapType: wrapType as PoolCuePresetOrderConfig["wrapType"],
     finishStyle: finishStyle as PoolCuePresetOrderConfig["finishStyle"],
     caseOption: caseOption as PoolCuePresetOrderConfig["caseOption"],
-    includeLaserEngraving,
   };
 };
 
@@ -321,11 +319,6 @@ const calculatePoolCuePrice = (
   // 专业硬壳盒
   if (config.caseOption === "pro") {
     lines.push({ label: "专业硬壳盒", amount: 460 });
-  }
-
-  // 激光刻字
-  if (config.includeLaserEngraving) {
-    lines.push({ label: "激光刻字", amount: 160 });
   }
 
   return {
@@ -544,6 +537,77 @@ app.patch(
  * POST /api/orders/pool-cue
  * 创建台球杆定制订单
  */
+app.get(
+  "/api/orders/my",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const rawKeyword = req.query.keyword;
+    const keyword =
+      typeof rawKeyword === "string"
+        ? rawKeyword.trim().slice(0, 100)
+        : Array.isArray(rawKeyword)
+          ? String(rawKeyword[0] ?? "")
+              .trim()
+              .slice(0, 100)
+          : "";
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    try {
+      const orders = await db.getOrdersForUser(userId, keyword, 100);
+      return res.json({
+        success: true,
+        orders,
+      });
+    } catch (err) {
+      console.error("user orders query error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+app.patch(
+  "/api/orders/:orderId/cancel",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const orderId = Array.isArray(req.params.orderId)
+      ? req.params.orderId[0]
+      : req.params.orderId;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    try {
+      const order = await db.cancelOrderForUser(orderId, userId);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found or cannot be cancelled",
+        });
+      }
+
+      return res.json({
+        success: true,
+        order,
+      });
+    } catch (err) {
+      console.error("user cancel order error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
 app.post(
   "/api/orders/pool-cue",
   authenticateToken,
@@ -714,6 +778,7 @@ app.get(
           email: user.email,
           img_path: user.img_path || null,
           bio: user.bio || "",
+          points: user.points || 0,
         },
       });
     } catch (err) {
@@ -766,6 +831,7 @@ app.get(
           role: user.role,
           img_path: user.img_path || null,
           bio: user.bio || "",
+          is_certified_designer: user.is_certified_designer,
           created_at: user.created_at,
         },
         works,

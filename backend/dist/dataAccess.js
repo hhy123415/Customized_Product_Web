@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = void 0;
-const crypto_1 = require("crypto");
 const pg_1 = require("pg");
 const pool = new pg_1.Pool({
     user: process.env.DB_USER,
@@ -66,7 +65,9 @@ exports.db = {
     async getUsersForAdmin(keyword, limit = 100) {
         const normalizedKeyword = keyword.trim();
         const wildcard = `%${normalizedKeyword}%`;
-        const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(200, Math.floor(limit))) : 100;
+        const safeLimit = Number.isFinite(limit)
+            ? Math.max(1, Math.min(200, Math.floor(limit)))
+            : 100;
         if (!normalizedKeyword) {
             const result = await pool.query(`
           SELECT
@@ -105,187 +106,202 @@ exports.db = {
       `, [wildcard, safeLimit]);
         return result.rows;
     },
-    async getProductCustomizationPagesByUserId(userId, status) {
-        const params = [userId];
-        const conditions = ["p.user_id = $1"];
-        if (status) {
-            params.push(status);
-            conditions.push(`p.status = $${params.length}`);
+    async getOrdersForAdmin(keyword, limit = 100) {
+        const normalizedKeyword = keyword.trim();
+        const wildcard = `%${normalizedKeyword}%`;
+        const safeLimit = Number.isFinite(limit)
+            ? Math.max(1, Math.min(200, Math.floor(limit)))
+            : 100;
+        if (!normalizedKeyword) {
+            const result = await pool.query(`
+        SELECT
+          o.order_id,
+          o.user_id,
+          u.username,
+          o.product_name,
+          o.customization_mode,
+          o.configuration,
+          o.pricing_lines,
+          o.total_price,
+          o.contact_name,
+          o.contact_phone,
+          o.shipping_address,
+          o.order_note,
+          o.design_image_path,
+          o.design_description,
+          o.status,
+          o.created_at,
+          o.updated_at
+        FROM pool_cue_orders o
+        LEFT JOIN users u ON o.user_id = u.user_id
+        ORDER BY o.created_at DESC, o.order_id DESC
+        LIMIT $1
+      `, [safeLimit]);
+            return result.rows;
         }
         const result = await pool.query(`
-        SELECT
-          p.page_id,
-          p.user_id,
-          p.product_name,
-          p.product_summary,
-          p.parameters,
-          p.status,
-          p.review_comment,
-          p.reviewed_by,
-          p.reviewed_at,
-          p.created_at,
-          p.updated_at,
-          u.username AS publisher_username,
-          reviewer.username AS reviewer_username
-        FROM product_customization_pages p
-        JOIN users u ON u.user_id = p.user_id
-        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
-        WHERE ${conditions.join(" AND ")}
-        ORDER BY p.updated_at DESC, p.page_id DESC
-      `, params);
+      SELECT
+        o.order_id,
+        o.user_id,
+        u.username,
+        o.product_name,
+        o.customization_mode,
+        o.configuration,
+        o.pricing_lines,
+        o.total_price,
+        o.contact_name,
+        o.contact_phone,
+        o.shipping_address,
+        o.order_note,
+        o.design_image_path,
+        o.design_description,
+        o.status,
+        o.created_at,
+        o.updated_at
+      FROM pool_cue_orders o
+      LEFT JOIN users u ON o.user_id = u.user_id
+      WHERE
+        o.order_id::TEXT ILIKE $1
+        OR u.username ILIKE $1
+        OR o.contact_name ILIKE $1
+        OR o.contact_phone ILIKE $1
+        OR o.status::TEXT ILIKE $1
+      ORDER BY o.created_at DESC, o.order_id DESC
+      LIMIT $2
+    `, [wildcard, safeLimit]);
         return result.rows;
     },
-    async getProductCustomizationPageById(pageId) {
-        const result = await pool.query(`
+    async getOrdersForUser(userId, keyword, limit = 100) {
+        const normalizedKeyword = keyword.trim();
+        const wildcard = `%${normalizedKeyword}%`;
+        const safeLimit = Number.isFinite(limit)
+            ? Math.max(1, Math.min(200, Math.floor(limit)))
+            : 100;
+        if (!normalizedKeyword) {
+            const result = await pool.query(`
         SELECT
-          p.page_id,
-          p.user_id,
-          p.product_name,
-          p.product_summary,
-          p.parameters,
-          p.status,
-          p.review_comment,
-          p.reviewed_by,
-          p.reviewed_at,
-          p.created_at,
-          p.updated_at,
-          u.username AS publisher_username,
-          reviewer.username AS reviewer_username
-        FROM product_customization_pages p
-        JOIN users u ON u.user_id = p.user_id
-        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
-        WHERE p.page_id = $1
-      `, [pageId]);
-        return result.rows[0] ?? null;
-    },
-    async saveProductCustomizationPage(params) {
-        const { pageId, userId, productName, productSummary, parameters } = params;
-        const normalizedParameters = JSON.stringify(parameters);
-        if (pageId) {
-            const updated = await pool.query(`
-          UPDATE product_customization_pages
-          SET
-            product_name = $1,
-            product_summary = $2,
-            parameters = $3::jsonb,
-            status = 'draft',
-            review_comment = NULL,
-            reviewed_by = NULL,
-            reviewed_at = NULL,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE page_id = $4 AND user_id = $5
-          RETURNING page_id
-        `, [productName, productSummary, normalizedParameters, pageId, userId]);
-            if (updated.rows[0]) {
-                return (await this.getProductCustomizationPageById(updated.rows[0].page_id));
-            }
+          o.order_id,
+          o.user_id,
+          u.username,
+          o.product_name,
+          o.customization_mode,
+          o.configuration,
+          o.pricing_lines,
+          o.total_price,
+          o.contact_name,
+          o.contact_phone,
+          o.shipping_address,
+          o.order_note,
+          o.design_image_path,
+          o.design_description,
+          o.status,
+          o.created_at,
+          o.updated_at
+        FROM pool_cue_orders o
+        LEFT JOIN users u ON o.user_id = u.user_id
+        WHERE o.user_id = $1
+        ORDER BY o.created_at DESC, o.order_id DESC
+        LIMIT $2
+      `, [userId, safeLimit]);
+            return result.rows;
         }
-        const createdPageId = pageId || (0, crypto_1.randomUUID)();
-        await pool.query(`
-        INSERT INTO product_customization_pages (
-          page_id,
-          user_id,
-          product_name,
-          product_summary,
-          parameters,
-          status
+        const result = await pool.query(`
+      SELECT
+        o.order_id,
+        o.user_id,
+        u.username,
+        o.product_name,
+        o.customization_mode,
+        o.configuration,
+        o.pricing_lines,
+        o.total_price,
+        o.contact_name,
+        o.contact_phone,
+        o.shipping_address,
+        o.order_note,
+        o.design_image_path,
+        o.design_description,
+        o.status,
+        o.created_at,
+        o.updated_at
+      FROM pool_cue_orders o
+      LEFT JOIN users u ON o.user_id = u.user_id
+      WHERE
+        o.user_id = $1
+        AND (
+          o.order_id::TEXT ILIKE $2
+          OR o.product_name ILIKE $2
+          OR o.contact_name ILIKE $2
+          OR o.contact_phone ILIKE $2
+          OR o.status::TEXT ILIKE $2
         )
-        VALUES ($1, $2, $3, $4, $5::jsonb, 'draft')
-      `, [createdPageId, userId, productName, productSummary, normalizedParameters]);
-        return (await this.getProductCustomizationPageById(createdPageId));
-    },
-    async submitProductCustomizationPage(pageId, userId) {
-        const updated = await pool.query(`
-        UPDATE product_customization_pages
-        SET
-          status = 'pending_review',
-          review_comment = NULL,
-          reviewed_by = NULL,
-          reviewed_at = NULL,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE page_id = $1 AND user_id = $2
-        RETURNING page_id
-      `, [pageId, userId]);
-        if (!updated.rows[0]) {
-            return null;
-        }
-        return this.getProductCustomizationPageById(pageId);
-    },
-    async getProductCustomizationPagesForAdmin(status) {
-        const params = [];
-        const whereClause = status ? "WHERE p.status = $1" : "";
-        if (status) {
-            params.push(status);
-        }
-        const result = await pool.query(`
-        SELECT
-          p.page_id,
-          p.user_id,
-          p.product_name,
-          p.product_summary,
-          p.parameters,
-          p.status,
-          p.review_comment,
-          p.reviewed_by,
-          p.reviewed_at,
-          p.created_at,
-          p.updated_at,
-          u.username AS publisher_username,
-          reviewer.username AS reviewer_username
-        FROM product_customization_pages p
-        JOIN users u ON u.user_id = p.user_id
-        LEFT JOIN users reviewer ON reviewer.user_id = p.reviewed_by
-        ${whereClause}
-        ORDER BY
-          CASE WHEN p.status = 'pending_review' THEN 0 ELSE 1 END,
-          p.updated_at DESC,
-          p.page_id DESC
-      `, params);
+      ORDER BY o.created_at DESC, o.order_id DESC
+      LIMIT $3
+    `, [userId, wildcard, safeLimit]);
         return result.rows;
     },
-    async reviewProductCustomizationPage(params) {
-        const { pageId, reviewerId, status, reviewComment } = params;
-        const updated = await pool.query(`
-        UPDATE product_customization_pages
-        SET
-          status = $1,
-          review_comment = $2,
-          reviewed_by = $3,
-          reviewed_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE page_id = $4
-        RETURNING page_id
-      `, [status, reviewComment, reviewerId, pageId]);
-        if (!updated.rows[0]) {
-            return null;
-        }
-        return this.getProductCustomizationPageById(pageId);
-    },
-    async getPublicProductCustomizationPages() {
+    async updateOrderStatus(orderId, status) {
         const result = await pool.query(`
-        SELECT
-          p.page_id,
-          p.user_id,
-          p.product_name,
-          p.product_summary,
-          p.parameters,
-          p.status,
-          p.created_at,
-          p.updated_at,
-          u.username AS publisher_username
-        FROM product_customization_pages p
-        JOIN users u ON u.user_id = p.user_id
-        WHERE p.status = 'approved'
-        ORDER BY p.created_at DESC, p.page_id DESC
-      `);
-        return result.rows;
+      UPDATE pool_cue_orders
+      SET status = $1, updated_at = NOW()
+      WHERE order_id = $2
+      RETURNING
+        order_id,
+        user_id,
+        (SELECT username FROM users WHERE user_id = pool_cue_orders.user_id) as username,
+        product_name,
+        customization_mode,
+        configuration,
+        pricing_lines,
+        total_price,
+        contact_name,
+        contact_phone,
+        shipping_address,
+        order_note,
+        design_image_path,
+        design_description,
+        status,
+        created_at,
+        updated_at
+    `, [status, orderId]);
+        return result.rows[0] || null;
+    },
+    async cancelOrderForUser(orderId, userId) {
+        const result = await pool.query(`
+      UPDATE pool_cue_orders
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE
+        order_id = $1
+        AND user_id = $2
+        AND status IN ('submitted', 'processing')
+      RETURNING
+        order_id,
+        user_id,
+        (SELECT username FROM users WHERE user_id = pool_cue_orders.user_id) as username,
+        product_name,
+        customization_mode,
+        configuration,
+        pricing_lines,
+        total_price,
+        contact_name,
+        contact_phone,
+        shipping_address,
+        order_note,
+        design_image_path,
+        design_description,
+        status,
+        created_at,
+        updated_at
+    `, [orderId, userId]);
+        return result.rows[0] || null;
     },
     async createPoolCueOrder(params) {
-        const { userId, productName, configuration, pricingLines, totalPrice, contactName, contactPhone, shippingAddress, orderNote, } = params;
+        const { userId, productName, configuration, pricingLines, totalPrice, contactName, contactPhone, shippingAddress, orderNote, customizationMode, designImagePath, designDescription, } = params;
         const result = await pool.query(`
         INSERT INTO pool_cue_orders (
           user_id,
           product_name,
+          customization_mode,
           configuration,
           pricing_lines,
           total_price,
@@ -293,13 +309,16 @@ exports.db = {
           contact_phone,
           shipping_address,
           order_note,
+          design_image_path,
+          design_description,
           status
         )
-        VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, $8, $9, 'submitted')
+        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, 'submitted')
         RETURNING
           order_id,
           user_id,
           product_name,
+          customization_mode,
           configuration,
           pricing_lines,
           total_price,
@@ -307,12 +326,15 @@ exports.db = {
           contact_phone,
           shipping_address,
           order_note,
+          design_image_path,
+          design_description,
           status,
           created_at,
           updated_at
       `, [
             userId,
             productName,
+            customizationMode,
             JSON.stringify(configuration),
             JSON.stringify(pricingLines),
             totalPrice,
@@ -320,6 +342,8 @@ exports.db = {
             contactPhone,
             shippingAddress,
             orderNote,
+            designImagePath,
+            designDescription,
         ]);
         return result.rows[0];
     },
