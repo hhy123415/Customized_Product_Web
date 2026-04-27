@@ -151,6 +151,9 @@ app.use("/uploads", express_1.default.static(UPLOAD_DIR));
 const SECRET_KEY = process.env.JWT_SECRET || "";
 const MAX_FREEFORM_DESCRIPTION_LENGTH = 2000;
 const MAX_FREEFORM_TEXT_LENGTH = 120;
+const CHECK_IN_BASE_POINTS = 5;
+const CHECK_IN_STREAK_BONUS_PER_DAY = 2;
+const CHECK_IN_MAX_BONUS_DAYS = 7;
 /** 各字段长度限制常量 */
 const MAX_BIO_LENGTH = 500; // 个人简介最大长度
 const MAX_WORK_DESCRIPTION_LENGTH = 200; // 作品描述最大长度
@@ -177,7 +180,6 @@ const normalizePoolCuePresetConfig = (input) => {
     const wrapType = String(raw.wrapType || "").trim();
     const finishStyle = String(raw.finishStyle || "").trim();
     const caseOption = String(raw.caseOption || "").trim();
-    const includeLaserEngraving = Boolean(raw.includeLaserEngraving);
     // 验证长度范围：142-150cm
     if (!Number.isFinite(lengthCm) || lengthCm < 142 || lengthCm > 150) {
         throw new Error("lengthCm is invalid");
@@ -225,7 +227,6 @@ const normalizePoolCuePresetConfig = (input) => {
         wrapType: wrapType,
         finishStyle: finishStyle,
         caseOption: caseOption,
-        includeLaserEngraving,
     };
 };
 /**
@@ -260,10 +261,6 @@ const calculatePoolCuePrice = (config) => {
     // 专业硬壳盒
     if (config.caseOption === "pro") {
         lines.push({ label: "专业硬壳盒", amount: 460 });
-    }
-    // 激光刻字
-    if (config.includeLaserEngraving) {
-        lines.push({ label: "激光刻字", amount: 160 });
     }
     return {
         lines,
@@ -631,6 +628,7 @@ app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
                 email: user.email,
                 img_path: user.img_path || null,
                 bio: user.bio || "",
+                points: user.points || 0,
             },
         });
     }
@@ -639,6 +637,100 @@ app.get("/api/my_info", auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             message: "服务器内部错误",
+        });
+    }
+});
+app.get("/api/my_info/check-in", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    try {
+        const [status, todayDate] = await Promise.all([
+            dataAccess_1.db.getUserCheckInStatus(userId),
+            dataAccess_1.db.getDatabaseCurrentDate(),
+        ]);
+        const currentStreak = (() => {
+            if (!status.last_check_in_date)
+                return 0;
+            const today = new Date(`${todayDate}T00:00:00Z`);
+            const lastCheckIn = new Date(`${status.last_check_in_date}T00:00:00Z`);
+            const diffDays = Math.round((today.getTime() - lastCheckIn.getTime()) / (24 * 60 * 60 * 1000));
+            if (diffDays <= 1) {
+                return status.current_streak;
+            }
+            return 0;
+        })();
+        const nextStreak = Math.max(1, currentStreak + 1);
+        const bonusPoints = Math.min(nextStreak - 1, CHECK_IN_MAX_BONUS_DAYS) *
+            CHECK_IN_STREAK_BONUS_PER_DAY;
+        return res.json({
+            success: true,
+            check_in: {
+                can_check_in: status.last_check_in_date !== todayDate,
+                last_check_in_date: status.last_check_in_date,
+                current_streak: currentStreak,
+                today_base_points: CHECK_IN_BASE_POINTS,
+                today_bonus_points: bonusPoints,
+                today_total_points: CHECK_IN_BASE_POINTS + bonusPoints,
+            },
+        });
+    }
+    catch (err) {
+        console.error("get check-in status error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+});
+app.post("/api/my_info/check-in", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized",
+        });
+    }
+    try {
+        const result = await dataAccess_1.db.createUserCheckIn({
+            userId,
+            basePoints: CHECK_IN_BASE_POINTS,
+            bonusPerStreakDay: CHECK_IN_STREAK_BONUS_PER_DAY,
+            maxBonusStreakDays: CHECK_IN_MAX_BONUS_DAYS,
+        });
+        if (result.alreadyCheckedIn) {
+            return res.status(409).json({
+                success: false,
+                message: "Already checked in today",
+                check_in: result.checkIn,
+                points: result.points,
+            });
+        }
+        return res.status(201).json({
+            success: true,
+            message: "Check-in successful",
+            check_in: result.checkIn,
+            points: result.points,
+        });
+    }
+    catch (err) {
+        if (typeof err === "object" &&
+            err !== null &&
+            "code" in err &&
+            err.code === "23505") {
+            return res.status(409).json({
+                success: false,
+                message: "Already checked in today",
+            });
+        }
+        console.error("create check-in error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
         });
     }
 });
@@ -675,6 +767,7 @@ app.get("/api/users/:userId/profile", auth_1.authenticateToken, async (req, res)
                 role: user.role,
                 img_path: user.img_path || null,
                 bio: user.bio || "",
+                is_certified_designer: user.is_certified_designer,
                 created_at: user.created_at,
             },
             works,

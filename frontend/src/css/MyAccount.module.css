@@ -1,210 +1,296 @@
 .container {
-  max-width: 600px;
-  margin: 50px auto; /* 居中显示，顶部有间距 */
-  padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 40px;
+  border-radius: 12px; 
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05); 
   background-color: #ffffff;
-  font-family: Arial, sans-serif;
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: #333;
 }
 
 .container h2 {
-  text-align: center;
-  color: #2c3e50;
-  margin-bottom: 25px;
-  border-bottom: 2px solid #e0e0e0;
-  padding-bottom: 15px;
+  text-align: left; 
+  color: #1e293b;
+  margin-bottom: 30px;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 20px;
+  font-size: 1.8rem;
 }
 
+/* 用户信息主卡片 */
 .userInfoCard {
-  background-color: #f9f9f9;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  padding: 20px 25px;
+  background-color: transparent;
+  border: none;
+  padding: 0;
 }
 
+/* 头像区域 */
 .avatarSection {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 40px;
+  padding-bottom: 30px;
+  border-bottom: 1px dashed #e2e8f0;
 }
 
 .avatarImage {
-  width: 120px;
-  height: 120px;
+  width: 140px; 
+  height: 140px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #d9d9d9;
-  background: #efefef;
+  border: 4px solid #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  background: #f8fafc;
 }
 
 .avatarUploadButton {
-  background-color: #2c3e50;
+  background-color: #475569;
   color: #ffffff;
-  border-radius: 6px;
-  padding: 8px 14px;
+  border-radius: 8px;
+  padding: 10px 20px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 .avatarUploadButton:hover {
-  background-color: #1f2d3a;
+  background-color: #334155;
 }
 
 .hiddenInput {
   display: none;
 }
 
-.uploadMessage {
-  margin: 0;
-  color: #2c3e50;
-  font-size: 14px;
-  font-weight: 600;
-}
-
+/* 文本信息 */
 .userInfoCard p {
-  margin-bottom: 12px;
-  line-height: 1.6;
-  font-size: 1.1em;
-  color: #555;
+  margin-bottom: 16px;
+  line-height: 1.8;
+  font-size: 1.15rem;
+  color: #475569;
+  display: flex;
+  align-items: center;
 }
 
 .userInfoCard p strong {
-  color: #2c3e50;
-  min-width: 80px; /* 确保标签对齐 */
-  display: inline-block;
+  color: #1e293b;
+  min-width: 100px; 
+  font-weight: 600;
 }
 
-.errorText {
-  color: #e74c3c;
-  font-weight: bold;
-  text-align: center;
-  margin-top: 20px;
+/* 签到卡片*/
+.checkInCard {
+  margin: 30px 0;
+  padding: 24px;
+  border: 1px solid #dcfce7;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #e8f5e9 100%);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.05);
 }
 
-.bioBlock {
+.checkInHeader {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 12px 0 18px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.checkInStreak {
+  color: #166534;
+  background-color: #fff;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.checkInText {
+  margin: 8px 0;
+  color: #3f6212;
+  font-size: 15px;
+}
+
+/* 签名区块 */
+.bioBlock {
+  margin: 30px 0;
+  padding: 20px;
+  background-color: #f8fafc;
+  border-radius: 8px;
 }
 
 .bioTextarea {
   width: 100%;
-  min-height: 90px;
+  min-height: 120px;
   resize: vertical;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 10px;
-  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 15px;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 12px;
 }
 
 .bioText {
-  margin: 0;
-  color: #444;
-  white-space: pre-wrap;
-  line-height: 1.6;
+  color: #334155;
+  font-style: italic;
+  padding: 10px 0;
 }
 
+/* 按钮*/
 .actionButton {
-  width: fit-content;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
-  color: #ffffff;
-  background: #2563eb;
-  cursor: pointer;
+  padding: 10px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: transform 0.1s, opacity 0.2s;
 }
 
-.actionButton:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
+.actionButton:active {
+  transform: scale(0.98);
 }
 
-.workSection {
-  margin-top: 20px;
-}
-
-.workSection h3 {
-  margin: 0 0 12px;
-}
-
+/* --- 作品上传区域优化 --- */
 .workUploadArea {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
+  flex-direction: column; /* 强制垂直排列，防止挤在同一行 */
+  gap: 16px;              /* 增加元素间的间距 */
+  background: #f8fafc;
+  padding: 24px;
+  border: 2px dashed #e2e8f0; /* 使用虚线框增加“上传区”的视觉暗示 */
+  border-radius: 16px;
+  margin-bottom: 40px;
 }
 
 .workDescriptionInput {
   width: 100%;
-  min-height: 72px;
-  resize: vertical;
+  min-height: 100px;      /* 稍微加高描述框 */
+  resize: none;           /* 禁止随意拉伸破坏布局 */
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 10px;
+  border-radius: 10px;
+  padding: 15px;
+  font-size: 14px;
+  line-height: 1.6;
+  background-color: #ffffff;
+  transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
 }
 
+.workDescriptionInput:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); /* 聚焦时更有科技感 */
+}
+
+/* 专门针对作品上传按钮的调整 */
+.workUploadArea .avatarUploadButton {
+  align-self: flex-start; /* 按钮靠左对齐，不再强制全宽，看起来更自然 */
+  padding: 12px 28px;
+  font-weight: 600;
+  background-color: #2563eb;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+}
+
+.workUploadArea .avatarUploadButton:hover {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+/* --- 作品列表网格优化 --- */
 .workGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 进一步加宽卡片 */
+  gap: 30px;
 }
 
 .workCard {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: none;
+  border-radius: 16px;
   background: #ffffff;
-  padding: 10px;
+  padding: 0; /* 改为溢出隐藏，让图片撑满顶部 */
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.workCard:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
 .workImage {
   width: 100%;
-  height: 150px;
+  height: 220px;
   object-fit: cover;
-  border-radius: 6px;
-  background: #efefef;
+  border-radius: 0; /* 顶部图片不需要圆角，由父容器裁剪 */
+}
+
+/* 作品下方的文字描述区 */
+.workCardContent {
+  padding: 20px; 
 }
 
 .workMeta {
-  margin: 8px 0 4px;
+  margin: 0 0 8px;
   font-size: 12px;
-  color: #64748b;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
 }
 
 .workDescription {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0 0 16px;
+  font-size: 14px;
   color: #334155;
-  white-space: pre-wrap;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* 描述过长时自动省略号 */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .deleteButton {
-  border: none;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 13px;
-  background: #dc2626;
-  color: #ffffff;
-  cursor: pointer;
+  width: 100%; /* 删除按钮全宽，方便操作 */
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 10px;
+  transition: all 0.2s;
 }
 
-.emptyText {
-  margin: 6px 0 0;
-  color: #64748b;
+.deleteButton:hover {
+  background: #fecaca;
+  color: #b91c1c;
 }
 
-/* 可以在这里添加一些响应式规则 */
+/* 反馈消息 */
+.uploadMessage {
+  text-align: center;
+  padding: 12px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+/* 响应式适配 */
 @media (max-width: 768px) {
   .container {
-    margin: 20px;
+    margin: 0;
     padding: 20px;
+    border-radius: 0;
+    max-width: 100%;
   }
+
+  .workGrid {
+    grid-template-columns: 1fr; /* 手机端单列 */
+  }
+
   .userInfoCard p {
-    font-size: 1em;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 }

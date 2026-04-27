@@ -11,6 +11,22 @@ export interface UserRow {
   points?:number;
 }
 
+export interface UserCheckInRow {
+  check_in_id: string;
+  user_id: string;
+  check_in_date: string;
+  streak_count: number;
+  base_points: number;
+  bonus_points: number;
+  total_points: number;
+  created_at: string;
+}
+
+export interface UserCheckInStatusRow {
+  last_check_in_date: string | null;
+  current_streak: number;
+}
+
 export interface UserPublicProfileRow {
   user_id: string;
   username: string;

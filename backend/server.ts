@@ -185,8 +185,12 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 
 /** JWT 密钥 */
 const SECRET_KEY = process.env.JWT_SECRET || "";
+
 const MAX_FREEFORM_DESCRIPTION_LENGTH = 2000;
 const MAX_FREEFORM_TEXT_LENGTH = 120;
+const CHECK_IN_BASE_POINTS = 5;
+const CHECK_IN_STREAK_BONUS_PER_DAY = 2;
+const CHECK_IN_MAX_BONUS_DAYS = 7;
 
 /** 各字段长度限制常量 */
 const MAX_BIO_LENGTH = 500; // 个人简介最大长度
@@ -786,6 +790,124 @@ app.get(
       res.status(500).json({
         success: false,
         message: "服务器内部错误",
+      });
+    }
+  },
+);
+
+app.get(
+  "/api/my_info/check-in",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    try {
+      const [status, todayDate] = await Promise.all([
+        db.getUserCheckInStatus(userId),
+        db.getDatabaseCurrentDate(),
+      ]);
+
+      const currentStreak = (() => {
+        if (!status.last_check_in_date) return 0;
+
+        const today = new Date(`${todayDate}T00:00:00Z`);
+        const lastCheckIn = new Date(`${status.last_check_in_date}T00:00:00Z`);
+        const diffDays = Math.round(
+          (today.getTime() - lastCheckIn.getTime()) / (24 * 60 * 60 * 1000),
+        );
+
+        if (diffDays <= 1) {
+          return status.current_streak;
+        }
+
+        return 0;
+      })();
+      const nextStreak = Math.max(1, currentStreak + 1);
+      const bonusPoints =
+        Math.min(nextStreak - 1, CHECK_IN_MAX_BONUS_DAYS) *
+        CHECK_IN_STREAK_BONUS_PER_DAY;
+
+      return res.json({
+        success: true,
+        check_in: {
+          can_check_in: status.last_check_in_date !== todayDate,
+          last_check_in_date: status.last_check_in_date,
+          current_streak: currentStreak,
+          today_base_points: CHECK_IN_BASE_POINTS,
+          today_bonus_points: bonusPoints,
+          today_total_points: CHECK_IN_BASE_POINTS + bonusPoints,
+        },
+      });
+    } catch (err) {
+      console.error("get check-in status error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/my_info/check-in",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    try {
+      const result = await db.createUserCheckIn({
+        userId,
+        basePoints: CHECK_IN_BASE_POINTS,
+        bonusPerStreakDay: CHECK_IN_STREAK_BONUS_PER_DAY,
+        maxBonusStreakDays: CHECK_IN_MAX_BONUS_DAYS,
+      });
+
+      if (result.alreadyCheckedIn) {
+        return res.status(409).json({
+          success: false,
+          message: "Already checked in today",
+          check_in: result.checkIn,
+          points: result.points,
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: "Check-in successful",
+        check_in: result.checkIn,
+        points: result.points,
+      });
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        err.code === "23505"
+      ) {
+        return res.status(409).json({
+          success: false,
+          message: "Already checked in today",
+        });
+      }
+
+      console.error("create check-in error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
       });
     }
   },

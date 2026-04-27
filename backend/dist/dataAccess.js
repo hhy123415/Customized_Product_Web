@@ -48,6 +48,120 @@ exports.db = {
         const result = await pool.query("UPDATE users SET bio = $1 WHERE user_id = $2 RETURNING *", [bio, userId]);
         return result.rows[0] ?? null;
     },
+    async getUserCheckInStatus(userId) {
+        const result = await pool.query(`
+        SELECT
+          TO_CHAR(check_in_date, 'YYYY-MM-DD') AS last_check_in_date,
+          streak_count AS current_streak
+        FROM user_check_ins
+        WHERE user_id = $1
+        ORDER BY check_in_date DESC, check_in_id DESC
+        LIMIT 1
+      `, [userId]);
+        return (result.rows[0] ?? {
+            last_check_in_date: null,
+            current_streak: 0,
+        });
+    },
+    async getDatabaseCurrentDate() {
+        const result = await pool.query(`SELECT TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD') AS today_date`);
+        return result.rows[0]?.today_date || "";
+    },
+    async createUserCheckIn(params) {
+        const { userId, basePoints, bonusPerStreakDay, maxBonusStreakDays } = params;
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+            const latestResult = await client.query(`
+          SELECT
+            TO_CHAR(check_in_date, 'YYYY-MM-DD') AS last_check_in_date,
+            streak_count AS current_streak
+          FROM user_check_ins
+          WHERE user_id = $1
+          ORDER BY check_in_date DESC, check_in_id DESC
+          LIMIT 1
+        `, [userId]);
+            const latest = latestResult.rows[0] ?? {
+                last_check_in_date: null,
+                current_streak: 0,
+            };
+            const alreadyCheckedResult = await client.query(`
+          SELECT
+            check_in_id,
+            user_id,
+            TO_CHAR(check_in_date, 'YYYY-MM-DD') AS check_in_date,
+            streak_count,
+            base_points,
+            bonus_points,
+            total_points,
+            created_at
+          FROM user_check_ins
+          WHERE user_id = $1 AND check_in_date = CURRENT_DATE
+          LIMIT 1
+        `, [userId]);
+            if (alreadyCheckedResult.rows[0]) {
+                const userResult = await client.query("SELECT * FROM users WHERE user_id = $1 LIMIT 1", [userId]);
+                await client.query("COMMIT");
+                return {
+                    checkIn: alreadyCheckedResult.rows[0],
+                    points: Number(userResult.rows[0]?.points || 0),
+                    alreadyCheckedIn: true,
+                };
+            }
+            let nextStreak = 1;
+            if (latest.last_check_in_date) {
+                const diffResult = await client.query(`
+            SELECT (CURRENT_DATE - $1::date)::int AS day_diff
+          `, [latest.last_check_in_date]);
+                const dayDiff = Number(diffResult.rows[0]?.day_diff ?? 0);
+                if (dayDiff === 1) {
+                    nextStreak = Number(latest.current_streak || 0) + 1;
+                }
+            }
+            const streakBonusDays = Math.max(0, Math.min(nextStreak - 1, maxBonusStreakDays));
+            const bonusPoints = streakBonusDays * bonusPerStreakDay;
+            const totalPoints = basePoints + bonusPoints;
+            const checkInResult = await client.query(`
+          INSERT INTO user_check_ins (
+            user_id,
+            check_in_date,
+            streak_count,
+            base_points,
+            bonus_points,
+            total_points
+          )
+          VALUES ($1, CURRENT_DATE, $2, $3, $4, $5)
+          RETURNING
+            check_in_id,
+            user_id,
+            TO_CHAR(check_in_date, 'YYYY-MM-DD') AS check_in_date,
+            streak_count,
+            base_points,
+            bonus_points,
+            total_points,
+            created_at
+        `, [userId, nextStreak, basePoints, bonusPoints, totalPoints]);
+            const userResult = await client.query(`
+          UPDATE users
+          SET points = COALESCE(points, 0) + $1
+          WHERE user_id = $2
+          RETURNING *
+        `, [totalPoints, userId]);
+            await client.query("COMMIT");
+            return {
+                checkIn: checkInResult.rows[0],
+                points: Number(userResult.rows[0]?.points || 0),
+                alreadyCheckedIn: false,
+            };
+        }
+        catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    },
     async getUserPublicProfileById(userId) {
         const result = await pool.query(`
         SELECT
@@ -56,6 +170,7 @@ exports.db = {
           role,
           img_path,
           bio,
+          is_certified_designer,
           created_at
         FROM users
         WHERE user_id = $1

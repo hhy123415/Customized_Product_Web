@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api/axios";
 import styles from "../css/MyAccount.module.css";
-import type { User_info, UserWork } from "../Interface";
+import type { CheckInStatus, User_info, UserWork } from "../Interface";
 import { useAuth } from "../hooks/useAuth";
 
 const roleDisplayMap: Record<string, string> = {
@@ -31,6 +31,9 @@ function MyAccount() {
   const [points, setPoints] = useState<number>(0);
   const [bioDraft, setBioDraft] = useState<string>("");
   const [newWorkDescription, setNewWorkDescription] = useState<string>("");
+  const [checkInStatus, setCheckInStatus] = useState<CheckInStatus | null>(
+    null,
+  );
 
   const [isOwner, setIsOwner] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -39,7 +42,11 @@ function MyAccount() {
   const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
   const [uploadingWork, setUploadingWork] = useState<boolean>(false);
   const [savingBio, setSavingBio] = useState<boolean>(false);
-  const [message, setMessage] = useState<string>("");
+  const [checkingIn, setCheckingIn] = useState<boolean>(false);
+
+  // --- 消息提示状态分离 ---
+  const [message, setMessage] = useState<string>(""); // 全局操作反馈（上传、修改资料等）
+  const [checkInMessage, setCheckInMessage] = useState<string>(""); // 仅用于签到的反馈提示
 
   const fetchProfile = async () => {
     if (!targetUserId) return;
@@ -48,6 +55,7 @@ function MyAccount() {
       setLoading(true);
       setError(null);
       setMessage("");
+      setCheckInMessage(""); // 重置签到消息
 
       const profileRes = await api.get(`/users/${targetUserId}/profile`);
       if (!profileRes.data.success) {
@@ -60,13 +68,21 @@ function MyAccount() {
       setBioDraft((profileRes.data.user?.bio as string) || "");
 
       if (profileRes.data.is_owner) {
-        const myRes = await api.get("/my_info");
+        const [myRes, checkInRes] = await Promise.all([
+          api.get("/my_info"),
+          api.get("/my_info/check-in"),
+        ]);
         if (myRes.data.success) {
           setEmail(String(myRes.data.user?.email || ""));
           setPoints(Number(myRes.data.user?.points || 0));
         }
+        if (checkInRes.data.success) {
+          setCheckInStatus(checkInRes.data.check_in as CheckInStatus);
+        }
       } else {
         setEmail("");
+        setPoints(0);
+        setCheckInStatus(null);
       }
     } catch (err) {
       console.error("Fetch user profile error:", err);
@@ -81,6 +97,7 @@ function MyAccount() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetUserId]);
 
+  /** 处理头像上传 */
   const handleAvatarUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -90,7 +107,6 @@ function MyAccount() {
     setMessage("");
     try {
       setUploadingAvatar(true);
-
       const formData = new FormData();
       formData.append("image", file);
       const uploadRes = await api.post("/images/upload", formData, {
@@ -121,6 +137,7 @@ function MyAccount() {
     }
   };
 
+  /** 保存个人签名 */
   const handleSaveBio = async () => {
     if (!isOwner) return;
     try {
@@ -140,6 +157,73 @@ function MyAccount() {
     }
   };
 
+  /** 每日签到 - 使用独立的 checkInMessage */
+  const handleCheckIn = async () => {
+    if (!isOwner || checkingIn || !checkInStatus?.can_check_in) return;
+
+    try {
+      setCheckingIn(true);
+      setCheckInMessage(""); // 清除之前的签到提示
+      const res = await api.post("/my_info/check-in");
+
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || "签到失败");
+      }
+
+      const latestCheckIn = res.data.check_in;
+      const currentStreak = Number(latestCheckIn?.streak_count || 1);
+      const bonusPoints = Number(latestCheckIn?.bonus_points || 0);
+      const totalPoints = Number(latestCheckIn?.total_points || 0);
+
+      setPoints(Number(res.data?.points || 0));
+      setCheckInStatus({
+        can_check_in: false,
+        last_check_in_date: latestCheckIn?.check_in_date || null,
+        current_streak: currentStreak,
+        today_base_points: Number(latestCheckIn?.base_points || 0),
+        today_bonus_points: bonusPoints,
+        today_total_points: totalPoints,
+      });
+
+      // 设置签到专属消息
+      setCheckInMessage(
+        `签到成功，获得 ${totalPoints} 积分${bonusPoints > 0 ? `（含连续签到奖励 ${bonusPoints} 积分）` : ""}`,
+      );
+    } catch (err) {
+      console.error("Check-in error:", err);
+      const alreadyCheckedIn =
+        typeof err === "object" &&
+        err !== null &&
+        "response" in err &&
+        typeof err.response === "object" &&
+        err.response !== null &&
+        "status" in err.response &&
+        err.response.status === 409;
+
+      if (alreadyCheckedIn) {
+        setCheckInMessage("今天已经签到过了");
+        // 尝试刷新状态同步 UI
+        try {
+          const [myRes, checkInRes] = await Promise.all([
+            api.get("/my_info"),
+            api.get("/my_info/check-in"),
+          ]);
+          if (myRes.data.success)
+            setPoints(Number(myRes.data.user?.points || 0));
+          if (checkInRes.data.success)
+            setCheckInStatus(checkInRes.data.check_in as CheckInStatus);
+        } catch (refreshErr) {
+          console.error("Refresh error:", refreshErr);
+        }
+      } else {
+        setCheckInMessage("签到失败，请稍后重试");
+      }
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
+  /** 上传作品 */
   const handleWorkUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -180,6 +264,7 @@ function MyAccount() {
     }
   };
 
+  /** 删除作品 */
   const handleDeleteWork = async (workId: string) => {
     if (!isOwner) return;
     try {
@@ -196,15 +281,13 @@ function MyAccount() {
     }
   };
 
-  if (loading) {
+  if (loading)
     return (
       <div className={styles.container}>
         <p>加载中...</p>
       </div>
     );
-  }
-
-  if (error || !userInfo) {
+  if (error || !userInfo)
     return (
       <div className={styles.container}>
         <p className={styles.errorText}>
@@ -212,13 +295,13 @@ function MyAccount() {
         </p>
       </div>
     );
-  }
 
   const avatarSrc = userInfo.img_path || "/default-avatar.png";
 
   return (
     <div className={styles.container}>
       <h2>{isOwner ? "个人中心" : `${userInfo.username} 的主页`}</h2>
+
       <div className={styles.userInfoCard}>
         <div className={styles.avatarSection}>
           <img src={avatarSrc} alt="用户头像" className={styles.avatarImage} />
@@ -243,13 +326,14 @@ function MyAccount() {
               src="/designer_icon.png"
               alt="认证设计师"
               style={{
-                height: "20px", // 根据你的字体大小调整高度
+                height: "20px",
                 marginLeft: "8px",
-                verticalAlign: "middle", // 使图片与文字对齐
+                verticalAlign: "middle",
               }}
             />
           )}
         </p>
+
         {isOwner && (
           <p>
             <strong>用户邮箱:</strong> {email}
@@ -265,6 +349,47 @@ function MyAccount() {
             {points ?? 0}
           </span>
         </p>
+
+        {/* --- 签到区域：独立消息显示 --- */}
+        {isOwner && checkInStatus && (
+          <div className={styles.checkInCard}>
+            <div className={styles.checkInHeader}>
+              <strong>每日签到</strong>
+              <span className={styles.checkInStreak}>
+                已连续签到 {checkInStatus.current_streak} 天
+              </span>
+            </div>
+            <p className={styles.checkInText}>
+              连续签到可额外获得积分奖励，快来坚持签到吧！
+            </p>
+            <p className={styles.checkInText}>
+              {checkInStatus.can_check_in
+                ? "今天还没有签到。"
+                : `今天已签到${checkInStatus.last_check_in_date ? `（${checkInStatus.last_check_in_date}）` : ""}。`}
+            </p>
+            <button
+              type="button"
+              className={styles.actionButton}
+              onClick={handleCheckIn}
+              disabled={!checkInStatus.can_check_in || checkingIn}
+            >
+              {checkingIn
+                ? "签到中..."
+                : checkInStatus.can_check_in
+                  ? "立即签到"
+                  : "今日已签到"}
+            </button>
+            {/* 签到专属消息：显示在签到卡片底部 */}
+            {checkInMessage && (
+              <p
+                className={styles.uploadMessage}
+                style={{ marginTop: "10px", color: "#27ae60" }}
+              >
+                {checkInMessage}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className={styles.bioBlock}>
           <strong>个人签名:</strong>
@@ -329,30 +454,37 @@ function MyAccount() {
                 <div key={work.work_id} className={styles.workCard}>
                   <img
                     src={work.image_path}
-                    alt={work.description || "用户作品"}
+                    alt="..."
                     className={styles.workImage}
                   />
-                  <p className={styles.workMeta}>
-                    {formatDate(work.created_at)}
-                  </p>
-                  {work.description && (
-                    <p className={styles.workDescription}>{work.description}</p>
-                  )}
-                  {isOwner && (
-                    <button
-                      type="button"
-                      className={styles.deleteButton}
-                      onClick={() => handleDeleteWork(work.work_id)}
-                    >
-                      删除作品
-                    </button>
-                  )}
+                  <div style={{ padding: "16px" }}>
+                    {" "}
+                    {/* 或者使用 class 控制 */}
+                    <p className={styles.workMeta}>
+                      {formatDate(work.created_at)}
+                    </p>
+                    {work.description && (
+                      <p className={styles.workDescription}>
+                        {work.description}
+                      </p>
+                    )}
+                    {isOwner && (
+                      <button
+                        type="button"
+                        className={styles.deleteButton}
+                        onClick={() => handleDeleteWork(work.work_id)}
+                      >
+                        删除作品
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
+        {/* 底部操作反馈消息（现在仅处理头像、签名、作品增删等全局操作） */}
         {message && <p className={styles.uploadMessage}>{message}</p>}
       </div>
     </div>

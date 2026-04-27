@@ -4,16 +4,16 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import api from "../api/axios";
 import styles from "../css/PoolCueCustomization.module.css";
 import { useAuth } from "../hooks/useAuth";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-// ==================== 类型定义 ====================
+// =================================================================
+// 类型定义 (Types)
+// =================================================================
 
 type JointType = "stainless-steel" | "titanium";
 type WrapType = "carbon-grip" | "genuine-leather" | "none";
 type CaseOption = "none" | "basic" | "pro";
-type FinishStyle =
-  | "matte-carbon" // 磨砂碳纹
-  | "gloss-carbon" // 高亮碳纹
-  | "ocean-blue"; // 海洋蓝
+type FinishStyle = "matte-carbon" | "gloss-carbon" | "ocean-blue";
 
 interface CueConfig {
   lengthCm: number;
@@ -31,7 +31,20 @@ interface OrderFormState {
   shippingAddress: string;
 }
 
-/** 球杆部件映射引用 */
+interface MagnifierState {
+  lensX: number;
+  lensY: number;
+  sampleX: number;
+  sampleY: number;
+  visible: boolean;
+}
+
+interface ImageRenderSize {
+  width: number;
+  height: number;
+}
+
+/** 3D模型部件引用接口 */
 interface CueModelParts {
   root: THREE.Object3D;
   tip?: THREE.Object3D;
@@ -42,12 +55,34 @@ interface CueModelParts {
   butt?: THREE.Object3D;
 }
 
-// ==================== 常量与工具 ====================
+// =================================================================
+// 配置常量 (Constants)
+// =================================================================
 
 const MODEL_SOURCE = {
   url: "/models/cue-carbon.glb",
   lengthAxis: "y" as const,
   baseRotation: [0, 0, -Math.PI / 2] as [number, number, number],
+};
+
+/** 涂装样式参数映射表 */
+const FINISH_STYLES: Record<
+  FinishStyle,
+  { color: string; rough: number; metal: number }
+> = {
+  "matte-carbon": { color: "#3b424a", rough: 0.8, metal: 0.1 },
+  "gloss-carbon": { color: "#222a30", rough: 0.1, metal: 0.4 },
+  "ocean-blue": { color: "#0055aa", rough: 0.2, metal: 0.2 },
+};
+
+/** 握把样式参数映射表 */
+const WRAP_STYLES: Record<
+  WrapType,
+  { color: string; rough: number; metal: number; visible: boolean }
+> = {
+  "carbon-grip": { color: "#1a1a1a", rough: 0.7, metal: 0.1, visible: true },
+  "genuine-leather": { color: "#4a3225", rough: 0.9, metal: 0, visible: true },
+  none: { color: "#222", rough: 0.2, metal: 0.2, visible: true }, // 光把模式：通常与后把颜色接近但更光滑
 };
 
 const INITIAL_CONFIG: CueConfig = {
@@ -66,7 +101,15 @@ const CURRENCY = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 0,
 });
 
-/** 递归查找模型节点 */
+// =================================================================
+// 工具函数 (Utilities)
+// =================================================================
+
+/**
+ * 递归查找具有特定名称的模型节点
+ * @param root 根对象
+ * @param name 目标节点名称
+ */
 const findNode = (root: THREE.Object3D, name: string) => {
   let res: THREE.Object3D | undefined;
   root.traverse((n) => {
@@ -75,100 +118,135 @@ const findNode = (root: THREE.Object3D, name: string) => {
   return res;
 };
 
-/** 隔离材质实例，防止多个部件共享材质导致的变色冲突 */
+/**
+ * 克隆并隔离材质实例，确保部件间的样式更新互不干扰
+ * @param part 需要隔离材质的 3D 部件
+ */
 const isolateMaterials = (part: THREE.Object3D | undefined) => {
   part?.traverse((node) => {
     if (node instanceof THREE.Mesh && node.material) {
-      if (Array.isArray(node.material)) {
-        node.material = node.material.map((m) => m.clone());
-      } else {
-        node.material = node.material.clone();
-      }
+      node.material = Array.isArray(node.material)
+        ? node.material.map((m) => m.clone())
+        : node.material.clone();
     }
   });
 };
 
-/** 设置部件材质颜色、粗糙度和金属度 */
+/**
+ * 批量设置部件的物理材质参数
+ * @param part 目标部件
+ * @param style 包含颜色、粗糙度、金属度的样式对象
+ * @param visible 是否可见
+ */
 const setPartStyle = (
   part: THREE.Object3D | undefined,
-  color: string,
-  rough = 0.5,
-  metal = 0.2,
+  style: { color: string; rough: number; metal: number },
+  visible = true,
 ) => {
-  part?.traverse((node) => {
+  if (!part) return;
+  part.visible = visible;
+  part.traverse((node) => {
     if (node instanceof THREE.Mesh) {
       const mats = Array.isArray(node.material)
         ? node.material
         : [node.material];
       mats.forEach((m) => {
         if (m instanceof THREE.MeshStandardMaterial) {
-          m.color.set(color);
-          m.roughness = rough;
-          m.metalness = metal;
+          m.color.set(style.color);
+          m.roughness = style.rough;
+          m.metalness = style.metal;
         }
       });
     }
   });
 };
 
-// ==================== 主组件 ====================
+// =================================================================
+// 主组件 (Main Component)
+// =================================================================
 
 export default function PoolCueCustomization() {
   const { auth } = useAuth();
   const [mode, setMode] = useState<"preset" | "freeform">("preset");
   const [config, setConfig] = useState(INITIAL_CONFIG);
-  // 自由定制状态
-  const [freeform, setFreeform] = useState({
-    designDescription: "",
-    referenceImagePath: "", // 服务器返回的相对路径 /uploads/xxx.jpg
-    referenceImageUrl: "", // 新增：完整的预览 URL
-    referenceImageName: "",
-  });
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
     "loading",
   );
+  const [modelRevision, setModelRevision] = useState(0);
+
+  // 自由定制状态
+  const [freeform, setFreeform] = useState({
+    designDescription: "",
+    referenceImagePath: "",
+    referenceImageUrl: "",
+    referenceImageName: "",
+  });
+
   const [orderForm, setOrderForm] = useState<OrderFormState>({
     contactName: "",
     contactPhone: "",
     shippingAddress: "",
   });
 
-  // Refs: 存储 Three.js 实例
+  // Three.js 实例引用
   const previewRef = useRef<HTMLDivElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const partsRef = useRef<CueModelParts | null>(null);
   const sceneElements = useRef<{
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
   } | null>(null);
 
-  // 1. 价格计算逻辑 (仅在参数模式下计算)
+  /** 动态计算订单价格流水 */
   const pricing = useMemo(() => {
-    const lines = [{ label: "基础杆体", amount: 1880 }];
+    const lines = [{ label: "基础球杆", amount: 1880 }];
     lines.push({
-      label: `长度调整(${config.lengthCm}cm)`,
+      label: `长度定制(${config.lengthCm}cm)`,
       amount: (config.lengthCm - 147) * 26,
     });
     lines.push({
       label: `重量调整(${config.weightOz}oz)`,
       amount: Math.round((config.weightOz - 19) * 80),
     });
+
     if (config.jointType === "titanium")
-      lines.push({ label: "钛合金接牙", amount: 320 });
+      lines.push({ label: "钛合金接牙升级", amount: 320 });
     if (config.wrapType === "genuine-leather")
-      lines.push({ label: "真皮握把", amount: 280 });
+      lines.push({ label: "真皮握把升级", amount: 280 });
     if (config.finishStyle !== "matte-carbon")
-      lines.push({ label: "特殊涂装", amount: 260 });
+      lines.push({ label: "特殊涂装工艺", amount: 260 });
     if (config.caseOption === "pro")
-      lines.push({ label: "专业硬壳盒", amount: 460 });
+      lines.push({ label: "专业防震硬壳盒", amount: 460 });
+
     return { lines, total: lines.reduce((s, i) => s + i.amount, 0) };
   }, [config]);
 
-  // 初始化 Three.js 场景
+  const [viewType, setViewType] = useState<"3d" | "2d">("3d");
+  const [zoom, setZoom] = useState(2.2);
+  const [magnifier, setMagnifier] = useState<MagnifierState>({
+    lensX: 0,
+    lensY: 0,
+    sampleX: 0,
+    sampleY: 0,
+    visible: false,
+  });
+  const [imageRenderSize, setImageRenderSize] = useState<ImageRenderSize>({
+    width: 0,
+    height: 0,
+  });
+
+  const IMAGE_2D_SOURCE = "/cue-2d-preview.jpg";
+  const MAGNIFIER_SIZE = 170;
+
+  /** 初始化场景与模型加载 */
   useEffect(() => {
-    if (!previewRef.current) return;
+    if (mode !== "preset" || !previewRef.current) return;
     const mount = previewRef.current;
 
+    // 1. 基础场景构建
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
       45,
@@ -176,133 +254,129 @@ export default function PoolCueCustomization() {
       0.1,
       100,
     );
-    camera.position.set(0.5, 0.3, 0.8);
+    camera.position.set(0.8, 0.5, 1.2);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     mount.appendChild(renderer.domElement);
 
-    // 灯光与地面
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 0.3;
+    controls.maxDistance = 3;
+    controls.autoRotateSpeed = 2.0;
+
+    // 2. 环境光照
     scene.add(
       new THREE.AmbientLight(0xffffff, 0.8),
       new THREE.DirectionalLight(0xffffff, 1),
     );
-    const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(2, 32),
-      new THREE.MeshStandardMaterial({ color: "#eee" }),
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -0.1;
-    scene.add(floor);
 
     const cueGroup = new THREE.Group();
     cueGroup.rotation.set(...MODEL_SOURCE.baseRotation);
     scene.add(cueGroup);
 
-    sceneElements.current = { renderer, scene, camera };
+    sceneElements.current = { renderer, scene, camera, controls };
 
-    // 加载模型
-    new GLTFLoader().load(MODEL_SOURCE.url, (gltf) => {
-      const root = gltf.scene;
-      cueGroup.add(root);
+    // 3. 模型资源加载
+    new GLTFLoader().load(
+      MODEL_SOURCE.url,
+      (gltf) => {
+        const root = gltf.scene;
+        cueGroup.add(root);
 
-      const p: CueModelParts = {
-        root,
-        tip: findNode(root, "tip"),
-        ferrule: findNode(root, "ferrule"),
-        shaft: findNode(root, "shaft"),
-        joint: findNode(root, "joint"),
-        grip: findNode(root, "grip"),
-        butt: findNode(root, "butt"),
-      };
-      partsRef.current = p;
-      Object.values(p).forEach(
-        (part) => part && isolateMaterials(part as THREE.Object3D),
-      );
-      setLoadState("ready");
-    });
+        const p: CueModelParts = {
+          root,
+          tip: findNode(root, "tip"),
+          ferrule: findNode(root, "ferrule"),
+          shaft: findNode(root, "shaft"),
+          joint: findNode(root, "joint"),
+          grip: findNode(root, "grip"),
+          butt: findNode(root, "butt"),
+        };
 
-    // 动画循环
+        partsRef.current = p;
+        Object.values(p).forEach(
+          (part) => part instanceof THREE.Object3D && isolateMaterials(part),
+        );
+        setLoadState("ready");
+        setModelRevision((prev) => prev + 1);
+      },
+      undefined,
+      () => {
+        setLoadState("error");
+      },
+    );
+
+    // 4. 渲染循环
     let frameId: number;
     const animate = () => {
-      // 优化：仅在 preset 模式下旋转和渲染，节省资源
-      if (mode === "preset") {
-        cueGroup.rotation.y += 0.005;
-        renderer.render(scene, camera);
-      }
+      controls.update();
+      renderer.render(scene, camera);
       frameId = requestAnimationFrame(animate);
     };
     animate();
 
     return () => {
       cancelAnimationFrame(frameId);
+      controls.dispose();
       renderer.dispose();
+      scene.clear();
+      partsRef.current = null;
+      sceneElements.current = null;
       mount.removeChild(renderer.domElement);
     };
-  }, [mode]); // 当模式切换时，Effect 会重新评估渲染逻辑
+  }, [mode]);
 
-  // 当配置改变时更新 3D 模型材质与几何
+  useEffect(() => {
+    const current = sceneElements.current;
+    const mount = previewRef.current;
+    if (!current || !mount) return;
+
+    current.controls.enabled = mode === "preset" && viewType === "3d";
+    if (mode === "preset" && viewType === "3d" && mount.clientHeight > 0) {
+      current.camera.aspect = mount.clientWidth / mount.clientHeight;
+      current.camera.updateProjectionMatrix();
+      current.renderer.setSize(mount.clientWidth, mount.clientHeight);
+    }
+    current.renderer.render(current.scene, current.camera);
+  }, [mode, viewType]);
+
+  /** 响应配置变更，实时更新模型几何与材质 */
   useEffect(() => {
     const p = partsRef.current;
     if (mode !== "preset" || !p || loadState !== "ready") return;
 
-    // 长度缩放
-    p.root.scale.setScalar(1);
+    // A. 长度缩放更新
     const lScale = config.lengthCm / 147;
+    p.root.scale.setScalar(1);
     if (MODEL_SOURCE.lengthAxis === "y") p.root.scale.y = lScale;
 
-    // ===== 修改：3种材质切换逻辑 =====
-    let mainColor: string;
-    let mainRough: number;
-    let mainMetal: number;
+    // B. 应用涂装样式 (前节与后把)
+    const finish =
+      FINISH_STYLES[config.finishStyle] || FINISH_STYLES["matte-carbon"];
+    setPartStyle(p.shaft, finish);
+    setPartStyle(p.butt, finish);
 
-    switch (config.finishStyle) {
-      case "matte-carbon":
-        mainColor = "#3b424a"; // 深灰
-        mainRough = 0.6; // 高粗糙 = 哑光
-        mainMetal = 0.1;
-        break;
-      case "gloss-carbon":
-        mainColor = "#2f3840"; // 深灰
-        mainRough = 0.1; // 低粗糙 = 高光
-        mainMetal = 0.3;
-        break;
-      case "ocean-blue":
-        mainColor = "#0066cc"; // 亮蓝
-        mainRough = 0.15; // 光滑
-        mainMetal = 0.1;
-        break;
-      default:
-        mainColor = "#3b424a";
-        mainRough = 0.5;
-        mainMetal = 0.2;
-    }
+    // C. 更新握把材质 (支持三种选项)
+    const wrap = WRAP_STYLES[config.wrapType];
+    setPartStyle(p.grip, wrap, wrap.visible);
 
-    // 同时应用到 shaft 和 butt
-    setPartStyle(p.shaft, mainColor, mainRough, mainMetal);
-    setPartStyle(p.butt, mainColor, mainRough, mainMetal);
+    // D. 更新接牙材质
+    const jointColor = config.jointType === "titanium" ? "#99ccaa" : "#bb88bb";
+    setPartStyle(p.joint, { color: jointColor, rough: 0.1, metal: 0.9 });
 
-    setPartStyle(
-      p.joint,
-      config.jointType === "titanium" ? "#9ca" : "#b8b",
-      0.2,
-      0.8,
-    );
-    setPartStyle(
-      p.grip,
-      config.wrapType === "genuine-leather" ? "#3e2a1f" : "#222",
-      0.8,
-      0,
-    );
-
+    // 强制触发一次渲染以立即反馈
     sceneElements.current?.renderer.render(
       sceneElements.current.scene,
       sceneElements.current.camera,
     );
-  }, [config, mode, loadState]);
+  }, [config, mode, loadState, modelRevision]);
 
-  // 提交订单逻辑
+  /** 提交订单逻辑 */
   const handleSubmit = async () => {
     if (!auth.isLoggedIn) return alert("请先登录");
 
@@ -334,7 +408,7 @@ export default function PoolCueCustomization() {
     }
   };
 
-  // 图片上传处理 - 适配后端 API
+  /** 图片上传处理 - 适配后端 API */
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -360,8 +434,8 @@ export default function PoolCueCustomization() {
         // 替换为服务器 URL
         setFreeform((prev) => ({
           ...prev,
-          referenceImagePath: res.data.path, // /uploads/xxx.jpg
-          referenceImageUrl: res.data.url, // http://host/uploads/xxx.jpg
+          referenceImagePath: res.data.path,
+          referenceImageUrl: res.data.url,
         }));
       }
     } catch (error) {
@@ -370,7 +444,7 @@ export default function PoolCueCustomization() {
     }
   };
 
-  // 清理临时 URL
+  /** 清理临时 URL */
   useEffect(() => {
     return () => {
       // 注意：只清理 blob: URL，不清理 http: URL
@@ -379,6 +453,81 @@ export default function PoolCueCustomization() {
       }
     };
   }, [freeform.referenceImageUrl]);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (!image) return;
+
+    const updateImageRenderSize = () => {
+      setImageRenderSize({
+        width: image.clientWidth,
+        height: image.clientHeight,
+      });
+    };
+
+    updateImageRenderSize();
+
+    const observer = new ResizeObserver(updateImageRenderSize);
+    observer.observe(image);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [viewType, mode]);
+
+  const handleMagnifierMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const container = imageContainerRef.current;
+    const image = imageRef.current;
+    if (!container || !image) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const imageRect = image.getBoundingClientRect();
+    const lensRadius = MAGNIFIER_SIZE / 2;
+
+    const pointerX = e.clientX - containerRect.left;
+    const pointerY = e.clientY - containerRect.top;
+    const relativeImageX = e.clientX - imageRect.left;
+    const relativeImageY = e.clientY - imageRect.top;
+    const imageLeft = imageRect.left - containerRect.left;
+    const imageTop = imageRect.top - containerRect.top;
+    const lensMinX = Math.min(
+      imageLeft + lensRadius,
+      imageLeft + imageRect.width / 2,
+    );
+    const lensMaxX = Math.max(
+      imageLeft + imageRect.width - lensRadius,
+      imageLeft + imageRect.width / 2,
+    );
+    const lensMinY = Math.min(
+      imageTop + lensRadius,
+      imageTop + imageRect.height / 2,
+    );
+    const lensMaxY = Math.max(
+      imageTop + imageRect.height - lensRadius,
+      imageTop + imageRect.height / 2,
+    );
+
+    const sampleX = Math.min(Math.max(relativeImageX, 0), imageRect.width);
+    const sampleY = Math.min(Math.max(relativeImageY, 0), imageRect.height);
+    const lensX = Math.min(Math.max(pointerX, lensMinX), lensMaxX);
+    const lensY = Math.min(Math.max(pointerY, lensMinY), lensMaxY);
+
+    setMagnifier({
+      lensX,
+      lensY,
+      sampleX,
+      sampleY,
+      visible:
+        e.clientX >= imageRect.left &&
+        e.clientX <= imageRect.right &&
+        e.clientY >= imageRect.top &&
+        e.clientY <= imageRect.bottom,
+    });
+  };
+
+  const handleMagnifierLeave = () => {
+    setMagnifier((prev) => ({ ...prev, visible: false }));
+  };
 
   return (
     <main className={styles.page}>
@@ -535,8 +684,96 @@ export default function PoolCueCustomization() {
 
         {/* 预览区：完全隔离逻辑 */}
         <section className={styles.previewPanel}>
+          {mode === "preset" && (
+            <div className={styles.viewToggleBar}>
+              <button
+                className={viewType === "3d" ? styles.activeView : ""}
+                onClick={() => setViewType("3d")}
+              >
+                3D 交互
+              </button>
+              <button
+                className={viewType === "2d" ? styles.activeView : ""}
+                onClick={() => setViewType("2d")}
+              >
+                2D 详情
+              </button>
+            </div>
+          )}
+
           {mode === "preset" ? (
-            <div className={styles.preview} ref={previewRef} />
+            <div className={styles.previewStack}>
+              <div
+                className={`${styles.preview} ${
+                  viewType === "3d"
+                    ? styles.activePreview
+                    : styles.hiddenPreview
+                }`}
+                ref={previewRef}
+              />
+
+              <div
+                className={`${styles.imageViewer} ${
+                  viewType === "2d"
+                    ? styles.activePreview
+                    : styles.hiddenPreview
+                }`}
+              >
+                <div
+                  className={styles.imageContainer}
+                  ref={imageContainerRef}
+                  onMouseMove={handleMagnifierMove}
+                  onMouseEnter={handleMagnifierMove}
+                  onMouseLeave={handleMagnifierLeave}
+                >
+                  <img
+                    src={IMAGE_2D_SOURCE}
+                    alt="台球杆 2D 预览"
+                    className={styles.staticImage}
+                    ref={imageRef}
+                    onLoad={() =>
+                      setImageRenderSize({
+                        width: imageRef.current?.clientWidth ?? 0,
+                        height: imageRef.current?.clientHeight ?? 0,
+                      })
+                    }
+                  />
+                  {magnifier.visible && (
+                    <div
+                      className={styles.magnifierLens}
+                      style={{
+                        left: `${magnifier.lensX}px`,
+                        top: `${magnifier.lensY}px`,
+                        width: `${MAGNIFIER_SIZE}px`,
+                        height: `${MAGNIFIER_SIZE}px`,
+                        backgroundImage: `url(${IMAGE_2D_SOURCE})`,
+                        backgroundSize: `${imageRenderSize.width * zoom}px ${
+                          imageRenderSize.height * zoom
+                        }px`,
+                        backgroundPosition: `${
+                          MAGNIFIER_SIZE / 2 - magnifier.sampleX * zoom
+                        }px ${MAGNIFIER_SIZE / 2 - magnifier.sampleY * zoom}px`,
+                      }}
+                    >
+                      <span className={styles.magnifierCrosshair} />
+                    </div>
+                  )}
+                </div>
+                <div className={styles.zoomControls}>
+                  <span>弱</span>
+                  <input
+                    type="range"
+                    min="1.6"
+                    max="4"
+                    step="0.1"
+                    value={zoom}
+                    onChange={(e) => setZoom(parseFloat(e.target.value))}
+                  />
+                  <span>强</span>
+                  <button onClick={() => setZoom(2.2)}>重置</button>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className={styles.freeformPreview}>
               <h2>设计方案预览</h2>

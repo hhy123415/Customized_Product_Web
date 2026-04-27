@@ -17,6 +17,15 @@ export interface UserWork {
   updated_at: string;
 }
 
+export interface CheckInStatus {
+  can_check_in: boolean;
+  last_check_in_date: string | null;
+  current_streak: number;
+  today_base_points: number;
+  today_bonus_points: number;
+  today_total_points: number;
+}
+
 type Role = "regular" | "admin";
 
 export interface AdminUser {
