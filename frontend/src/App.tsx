@@ -13,6 +13,7 @@ import Square from "./pages/CreativeSquare";
 import PostDetailPage from "./pages/PostDetail";
 import ProductCustomization from "./pages/ProductCustomization";
 import PoolCueCustomization from "./pages/PoolCueCustomization";
+import CarbonPaddleCustomization from "./pages/CarbonPaddleCustomization";
 import Live2DViewer from "./component/Live2DViewer";
 import { useAuth } from "./hooks/useAuth";
 import About from "./pages/About";
@@ -100,6 +101,14 @@ const AppContent = () => {
           element={
             <UserRoute>
               <PoolCueCustomization />
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/product-customization/carbon-paddle"
+          element={
+            <UserRoute>
+              <CarbonPaddleCustomization />
             </UserRoute>
           }
         />

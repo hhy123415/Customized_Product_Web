@@ -1,7 +1,7 @@
 /* ProductCustomization.css - 统一设计系统 */
 
 /* 导入设计系统变量 */
-@import './variables.css';
+@import "./variables.css";
 
 .page {
   min-height: calc(100vh - 64px);
@@ -64,7 +64,7 @@
 }
 
 .card::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -85,31 +85,11 @@
   opacity: 1;
 }
 
-.badge {
-  display: inline-flex;
-  margin-bottom: var(--space-3);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
-  font-weight: var(--font-semibold);
-  align-self: flex-start;
-}
-
 .card h2 {
   margin: 0 0 var(--space-2);
   color: var(--color-gray-900);
   font-size: var(--text-xl);
   font-weight: var(--font-semibold);
-}
-
-.card p {
-  margin: 0 0 var(--space-4);
-  line-height: 1.6;
-  color: var(--color-gray-600);
-  font-size: var(--text-sm);
-  flex-grow: 1;
 }
 
 .cta {
@@ -128,23 +108,12 @@
 }
 
 .cta::after {
-  content: '→';
+  content: "→";
   transition: transform var(--transition-normal);
 }
 
 .card:hover .cta::after {
   transform: translateX(4px);
-}
-
-/* 特色卡片样式 */
-.featured-card {
-  border-color: var(--color-primary);
-  background: linear-gradient(135deg, var(--color-white) 0%, var(--color-primary-bg) 100%);
-}
-
-.featured-card .badge {
-  background: var(--gradient-primary);
-  color: var(--color-white);
 }
 
 /* 响应式设计 */
@@ -177,10 +146,6 @@
 
   .card h2 {
     font-size: var(--text-lg);
-  }
-
-  .card p {
-    font-size: var(--text-xs);
   }
 }
 

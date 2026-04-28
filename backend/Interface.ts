@@ -1,5 +1,7 @@
+// ==================== 基础公共类型 ====================
 type Role = "regular" | "enterprise" | "admin";
 
+// ==================== 用户 ====================
 export interface UserRow {
   user_id?: string;
   username: string;
@@ -8,23 +10,7 @@ export interface UserRow {
   role: Role;
   img_path?: string | null;
   bio?: string | null;
-  points?:number;
-}
-
-export interface UserCheckInRow {
-  check_in_id: string;
-  user_id: string;
-  check_in_date: string;
-  streak_count: number;
-  base_points: number;
-  bonus_points: number;
-  total_points: number;
-  created_at: string;
-}
-
-export interface UserCheckInStatusRow {
-  last_check_in_date: string | null;
-  current_streak: number;
+  points?: number;
 }
 
 export interface UserPublicProfileRow {
@@ -48,6 +34,24 @@ export interface AdminUserRow {
   updated_at: string;
 }
 
+// ==================== 签到 ====================
+export interface UserCheckInStatusRow {
+  last_check_in_date: string | null;
+  current_streak: number;
+}
+
+export interface UserCheckInRow {
+  check_in_id: string;
+  user_id: string;
+  check_in_date: string;
+  streak_count: number;
+  base_points: number;
+  bonus_points: number;
+  total_points: number;
+  created_at: string;
+}
+
+// ==================== 作品 ====================
 export interface UserWorkRow {
   work_id: string;
   user_id: string;
@@ -57,6 +61,7 @@ export interface UserWorkRow {
   updated_at: string;
 }
 
+// ==================== 论坛 ====================
 export interface PostRow {
   post_id: string;
   title: string;
@@ -94,6 +99,7 @@ export interface CommentRow {
   author_img_path?: string | null;
 }
 
+// ==================== 邮件验证 ====================
 export interface EmailVerificationCodeRow {
   id: string;
   email: string;
@@ -105,7 +111,14 @@ export interface EmailVerificationCodeRow {
   user_agent?: string | null;
 }
 
+// ==================== 台球杆定制订单 ====================
 export type PoolCueCustomizationMode = "preset" | "freeform";
+export type PoolCueOrderStatus =
+  | "submitted"
+  | "processing"
+  | "shipped"
+  | "completed"
+  | "cancelled";
 
 export interface PoolCuePresetOrderConfig {
   customizationMode: "preset";
@@ -139,13 +152,6 @@ export interface PoolCueOrderPriceLine {
   label: string;
   amount: number;
 }
-
-export type PoolCueOrderStatus =
-  | "submitted"
-  | "processing"
-  | "shipped"
-  | "completed"
-  | "cancelled";
 
 export interface PoolCueOrderRow {
   order_id: string;
@@ -181,7 +187,7 @@ export interface AdminOrderRow {
   order_note: string | null;
   design_image_path: string | null;
   design_description: string | null;
-  status: "submitted" | "processing" | "shipped" | "completed" | "cancelled";
+  status: PoolCueOrderStatus;
   created_at: string;
   updated_at: string;
 }

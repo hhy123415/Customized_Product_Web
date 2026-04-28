@@ -33,7 +33,7 @@ export const db = {
   ): Promise<AdminOrderRow | null> {
     const result = await pool.query<AdminOrderRow>(
       `
-      UPDATE pool_cue_orders
+      UPDATE orders
       SET status = 'cancelled', updated_at = NOW()
       WHERE
         order_id = $1
@@ -42,7 +42,7 @@ export const db = {
       RETURNING
         order_id,
         user_id,
-        (SELECT username FROM users WHERE user_id = pool_cue_orders.user_id) as username,
+        (SELECT username FROM users WHERE user_id = orders.user_id) as username,
         product_name,
         customization_mode,
         configuration,
@@ -146,7 +146,7 @@ export const db = {
 
     const result = await pool.query<PoolCueOrderRow>(
       `
-        INSERT INTO pool_cue_orders (
+        INSERT INTO orders (
           user_id,
           product_name,
           customization_mode,
@@ -262,7 +262,8 @@ export const db = {
     points: number;
     alreadyCheckedIn: boolean;
   }> {
-    const { userId, basePoints, bonusPerStreakDay, maxBonusStreakDays } = params;
+    const { userId, basePoints, bonusPerStreakDay, maxBonusStreakDays } =
+      params;
     const client = await pool.connect();
 
     try {
@@ -333,7 +334,10 @@ export const db = {
       }
 
       // 计算积分奖励
-      const streakBonusDays = Math.max(0, Math.min(nextStreak - 1, maxBonusStreakDays));
+      const streakBonusDays = Math.max(
+        0,
+        Math.min(nextStreak - 1, maxBonusStreakDays),
+      );
       const bonusPoints = streakBonusDays * bonusPerStreakDay;
       const totalPoints = basePoints + bonusPoints;
 
@@ -461,7 +465,9 @@ export const db = {
   ): Promise<AdminOrderRow[]> {
     const normalizedKeyword = keyword.trim();
     const wildcard = `%${normalizedKeyword}%`;
-    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(200, Math.floor(limit))) : 100;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.max(1, Math.min(200, Math.floor(limit)))
+      : 100;
 
     const sql = `
       SELECT
@@ -469,7 +475,7 @@ export const db = {
         o.configuration, o.pricing_lines, o.total_price, o.contact_name,
         o.contact_phone, o.shipping_address, o.order_note, o.design_image_path,
         o.design_description, o.status, o.created_at, o.updated_at
-      FROM pool_cue_orders o
+      FROM orders o
       LEFT JOIN users u ON o.user_id = u.user_id
       ${!normalizedKeyword ? "" : "WHERE o.order_id::TEXT ILIKE $1 OR u.username ILIKE $1 OR o.contact_name ILIKE $1 OR o.contact_phone ILIKE $1 OR o.status::TEXT ILIKE $1"}
       ORDER BY o.created_at DESC, o.order_id DESC
@@ -489,7 +495,9 @@ export const db = {
   ): Promise<AdminOrderRow[]> {
     const normalizedKeyword = keyword.trim();
     const wildcard = `%${normalizedKeyword}%`;
-    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(200, Math.floor(limit))) : 100;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.max(1, Math.min(200, Math.floor(limit)))
+      : 100;
 
     const sql = `
       SELECT
@@ -497,7 +505,7 @@ export const db = {
         o.configuration, o.pricing_lines, o.total_price, o.contact_name,
         o.contact_phone, o.shipping_address, o.order_note, o.design_image_path,
         o.design_description, o.status, o.created_at, o.updated_at
-      FROM pool_cue_orders o
+      FROM orders o
       LEFT JOIN users u ON o.user_id = u.user_id
       WHERE o.user_id = $1
       ${!normalizedKeyword ? "" : "AND (o.order_id::TEXT ILIKE $2 OR o.product_name ILIKE $2 OR o.contact_name ILIKE $2 OR o.contact_phone ILIKE $2 OR o.status::TEXT ILIKE $2)"}
@@ -505,7 +513,9 @@ export const db = {
       LIMIT ${!normalizedKeyword ? "$2" : "$3"}
     `;
 
-    const params = !normalizedKeyword ? [userId, safeLimit] : [userId, wildcard, safeLimit];
+    const params = !normalizedKeyword
+      ? [userId, safeLimit]
+      : [userId, wildcard, safeLimit];
     const result = await pool.query<AdminOrderRow>(sql, params);
     return result.rows;
   },
@@ -634,7 +644,9 @@ export const db = {
   ): Promise<AdminUserRow[]> {
     const normalizedKeyword = keyword.trim();
     const wildcard = `%${normalizedKeyword}%`;
-    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(200, Math.floor(limit))) : 100;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.max(1, Math.min(200, Math.floor(limit)))
+      : 100;
 
     const sql = `
       SELECT user_id, username, email, role, img_path, bio, created_at, updated_at
@@ -694,12 +706,12 @@ export const db = {
   ): Promise<AdminOrderRow | null> {
     const result = await pool.query<AdminOrderRow>(
       `
-      UPDATE pool_cue_orders
+      UPDATE orders
       SET status = $1, updated_at = NOW()
       WHERE order_id = $2
       RETURNING
         order_id, user_id,
-        (SELECT username FROM users WHERE user_id = pool_cue_orders.user_id) as username,
+        (SELECT username FROM users WHERE user_id = orders.user_id) as username,
         product_name, customization_mode, configuration, pricing_lines, total_price,
         contact_name, contact_phone, shipping_address, order_note,
         design_image_path, design_description, status, created_at, updated_at

@@ -289,6 +289,43 @@ const buildFreeformPoolCueOrder = (params) => {
         total: lines.reduce((sum, item) => sum + item.amount, 0),
     };
 };
+const calculateCarbonPaddlePrice = (config) => {
+    const lengthCm = Number(config?.lengthCm) || 220;
+    const paddleWeightG = Number(config?.paddleWeightG) || 640;
+    const bladeShape = String(config?.bladeShape || "teardrop");
+    const shaftFlex = String(config?.shaftFlex || "medium");
+    const gripStyle = String(config?.gripStyle || "ergonomic");
+    const finishStyle = String(config?.finishStyle || "raw-carbon");
+    const accessoryPack = String(config?.accessoryPack || "none");
+    const lines = [{ label: "基础碳纤维划船桨", amount: 2680 }];
+    lines.push({
+        label: `长度定制(${lengthCm}cm)`,
+        amount: (lengthCm - 220) * 28,
+    });
+    lines.push({
+        label: `轻量化调校(${paddleWeightG}g)`,
+        amount: Math.round((640 - paddleWeightG) * 2.5),
+    });
+    if (bladeShape === "rectangular") {
+        lines.push({ label: "矩形桨叶升级", amount: 180 });
+    }
+    if (shaftFlex === "soft") {
+        lines.push({ label: "柔性桨杆调校", amount: 220 });
+    }
+    if (gripStyle === "anti-slip") {
+        lines.push({ label: "防滑握柄升级", amount: 140 });
+    }
+    if (finishStyle !== "raw-carbon") {
+        lines.push({ label: "定制表面涂装", amount: 260 });
+    }
+    if (accessoryPack === "pro") {
+        lines.push({ label: "专业附件包", amount: 420 });
+    }
+    return {
+        lines,
+        total: lines.reduce((sum, item) => sum + item.amount, 0),
+    };
+};
 // ==================== API 路由 ====================
 // -------------------- 用户认证相关 --------------------
 /**
@@ -598,6 +635,111 @@ app.post("/api/orders/pool-cue", auth_1.authenticateToken, async (req, res) => {
     }
     catch (err) {
         console.error("create pool cue order error:", err);
+        return res.status(400).json({
+            success: false,
+            message: err instanceof Error ? err.message : "Invalid request",
+        });
+    }
+});
+app.post("/api/orders/carbon-paddle", auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.user_id;
+    const { config, customization_mode, contact_name, contact_phone, shipping_address, order_note, design_image_path, design_description, } = req.body;
+    if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const contactName = String(contact_name || "").trim();
+    const contactPhone = String(contact_phone || "").trim();
+    const shippingAddress = String(shipping_address || "").trim();
+    const orderNote = String(order_note || "").trim();
+    const customizationMode = customization_mode === "freeform" ? "freeform" : "preset";
+    const designImagePath = String(design_image_path || "").trim();
+    const designDescription = String(design_description || "").trim();
+    if (!contactName) {
+        return res
+            .status(400)
+            .json({ success: false, message: "contact_name is required" });
+    }
+    if (!contactPhone) {
+        return res
+            .status(400)
+            .json({ success: false, message: "contact_phone is required" });
+    }
+    if (!shippingAddress) {
+        return res
+            .status(400)
+            .json({ success: false, message: "shipping_address is required" });
+    }
+    if (contactName.length > MAX_ORDER_CONTACT_NAME_LENGTH) {
+        return res
+            .status(400)
+            .json({ success: false, message: "contact_name is too long" });
+    }
+    if (contactPhone.length > MAX_ORDER_CONTACT_PHONE_LENGTH) {
+        return res
+            .status(400)
+            .json({ success: false, message: "contact_phone is too long" });
+    }
+    if (shippingAddress.length > MAX_ORDER_SHIPPING_ADDRESS_LENGTH) {
+        return res
+            .status(400)
+            .json({ success: false, message: "shipping_address is too long" });
+    }
+    if (orderNote.length > MAX_ORDER_NOTE_LENGTH) {
+        return res
+            .status(400)
+            .json({ success: false, message: "order_note is too long" });
+    }
+    if (designImagePath && !designImagePath.startsWith("/uploads/")) {
+        return res.status(400).json({
+            success: false,
+            message: "design_image_path must be under /uploads/",
+        });
+    }
+    if (designDescription.length > MAX_FREEFORM_DESCRIPTION_LENGTH) {
+        return res.status(400).json({
+            success: false,
+            message: "design_description is too long",
+        });
+    }
+    try {
+        let orderPayload;
+        if (customizationMode === "freeform") {
+            orderPayload = {
+                configuration: config || {},
+                pricingLines: [],
+                totalPrice: 0,
+                designImagePath: design_image_path || null,
+                designDescription: design_description || null,
+            };
+        }
+        else {
+            const pricing = calculateCarbonPaddlePrice(config || {});
+            orderPayload = {
+                configuration: config || {},
+                pricingLines: pricing.lines,
+                totalPrice: pricing.total,
+                designImagePath: null,
+                designDescription: null,
+            };
+        }
+        const order = await dataAccess_1.db.createPoolCueOrder({
+            userId,
+            productName: "碳纤维划船桨",
+            contactName: contact_name,
+            contactPhone: contact_phone,
+            shippingAddress: shipping_address,
+            orderNote: order_note || null,
+            customizationMode,
+            ...orderPayload,
+        });
+        return res.status(201).json({
+            success: true,
+            message: "Order created",
+            order,
+        });
+    }
+    catch (err) {
+        console.error("create carbon paddle order error:", err);
         return res.status(400).json({
             success: false,
             message: err instanceof Error ? err.message : "Invalid request",
