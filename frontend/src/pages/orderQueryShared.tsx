@@ -52,7 +52,16 @@ const CONFIG_TRANSLATION: Record<string, string> = {
   false: "否",
   "matte-carbon": "磨砂碳纹",
   "gloss-carbon": "高亮碳纹",
+  "satin-carbon": "缎面碳纹",
   "ocean-blue": "海洋蓝",
+  "glacier-white": "冰川白",
+  use: "使用场景",
+  touring: "休闲巡航",
+  "sea-touring": "海划远行",
+  fitness: "训练健身",
+  shaftflex: "桨杆硬度",
+  stiff: "硬",
+  medium: "中",
 };
 
 const t = (text: string | number | boolean): string => {

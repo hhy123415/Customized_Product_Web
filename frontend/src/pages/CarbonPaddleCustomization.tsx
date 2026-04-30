@@ -1,46 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import api from "../api/axios";
-import styles from "../css/CarbonPaddleCustomization.module.css";
-import { useAuth } from "../hooks/useAuth";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import api from "../api/axios";
+import styles from "../css/PoolCueCustomization.module.css";
+import { useAuth } from "../hooks/useAuth";
 
-// =================================================================
-// 类型定义 (Types)
-// =================================================================
+// ---------- 类型定义 ----------
 
-type PaddleDiscipline = "sprint" | "marathon" | "touring";
-type BladeShape = "teardrop" | "rectangular";
-type ShaftFlex = "stiff" | "medium" | "soft";
-type GripStyle = "ergonomic" | "straight" | "anti-slip";
-type FinishStyle = "raw-carbon" | "satin-carbon" | "racing-red";
-type AccessoryPack = "none" | "entry" | "pro";
+/** 定制模式：参数定制 或 自由方案 */
 type CustomizationMode = "preset" | "freeform";
 
+/** 船桨使用场景 */
+type PaddleUse = "touring" | "sea-touring" | "fitness";
+
+/** 桨杆硬度/弹性 */
+type ShaftFlex = "medium" | "stiff";
+
+/** 表面处理/涂装风格 */
+type FinishStyle = "matte-carbon" | "satin-carbon" | "glacier-white";
+
+
+/** 完整的预设配置数据 */
 interface PaddleConfig {
+  use: PaddleUse;
   lengthCm: number;
-  bladeWidthCm: number;
-  paddleWeightG: number;
-  discipline: PaddleDiscipline;
-  bladeShape: BladeShape;
   shaftFlex: ShaftFlex;
-  gripStyle: GripStyle;
   finishStyle: FinishStyle;
-  accessoryPack: AccessoryPack;
 }
 
+/** 自由定制模式的状态 */
 interface FreeformState {
   designDescription: string;
+  referenceImagePath: string;
+  referenceImageUrl: string;
+  referenceImageName: string;
 }
 
+/** 订单联系信息 */
 interface OrderFormState {
   contactName: string;
   contactPhone: string;
   shippingAddress: string;
 }
 
-/** 放大镜状态 */
+/** 2D 放大镜的位置与采样坐标状态 */
 interface MagnifierState {
   lensX: number;
   lensY: number;
@@ -49,12 +53,13 @@ interface MagnifierState {
   visible: boolean;
 }
 
+/** 2D 预览图片在页面中的实际渲染尺寸 */
 interface ImageRenderSize {
   width: number;
   height: number;
 }
 
-/** 3D 模型部件引用 - 预留划船桨子节点名称 */
+/** 从 GLB 模型中提取的各个部件引用 */
 interface PaddleModelParts {
   root: THREE.Object3D;
   blade1?: THREE.Object3D;
@@ -65,69 +70,77 @@ interface PaddleModelParts {
   joint2?: THREE.Object3D;
 }
 
-// =================================================================
-// 配置常量 (Constants)
-// =================================================================
+// ---------- 常量配置 ----------
 
+/** 3D 模型加载路径与基础变换 */
 const MODEL_SOURCE = {
-  url: "/models/paddle.glb", // 待替换实际划船桨模型
+  url: "/models/paddle.glb",
   lengthAxis: "y" as const,
-  baseRotation: [0, 0, 0] as [number, number, number], // 根据实际模型方向调整
+  baseRotation: [0, 0, 0] as [number, number, number],
 };
 
-/** 涂装样式参数 */
+/** 不同表面处理对应的材质参数 */
 const FINISH_STYLES: Record<
   FinishStyle,
   { color: string; rough: number; metal: number }
 > = {
-  "raw-carbon": { color: "#222222", rough: 0.8, metal: 0.1 },
-  "satin-carbon": { color: "#3b424a", rough: 0.3, metal: 0.4 },
-  "racing-red": { color: "#aa0033", rough: 0.15, metal: 0.5 },
+  "matte-carbon": { color: "#2b3137", rough: 0.72, metal: 0.12 },
+  "satin-carbon": { color: "#49525b", rough: 0.28, metal: 0.26 },
+  "glacier-white": { color: "#d9e6ee", rough: 0.22, metal: 0.12 },
 };
 
+/** 预设配置的默认值 */
 const INITIAL_CONFIG: PaddleConfig = {
+  use: "touring",
   lengthCm: 220,
-  bladeWidthCm: 17,
-  paddleWeightG: 640,
-  discipline: "touring",
-  bladeShape: "teardrop",
   shaftFlex: "medium",
-  gripStyle: "ergonomic",
   finishStyle: "satin-carbon",
-  accessoryPack: "entry",
 };
 
+/** 人民币格式化工具 */
 const CURRENCY = new Intl.NumberFormat("zh-CN", {
   style: "currency",
   currency: "CNY",
   minimumFractionDigits: 0,
 });
 
-// =================================================================
-// 工具函数 (Utilities)
-// =================================================================
+/** 2D 详情图路径 */
+const IMAGE_2D_SOURCE = "/Carbon-Canoe-Paddle.jpg";
 
-/** 递归查找节点（节点名不区分大小写） */
+/** 放大镜镜头尺寸(px) */
+const MAGNIFIER_SIZE = 170;
+
+// ---------- Three.js 辅助函数 ----------
+
+/**
+ * 在 Three.js 节点树中按照名字查找节点（大小写不敏感）
+ */
 const findNode = (root: THREE.Object3D, name: string) => {
   let res: THREE.Object3D | undefined;
-  root.traverse((n) => {
-    if (!res && n.name.toLowerCase() === name.toLowerCase()) res = n;
+  root.traverse((node) => {
+    if (!res && node.name.toLowerCase() === name.toLowerCase()) {
+      res = node;
+    }
   });
   return res;
 };
 
-/** 克隆材质，确保独立 */
+/**
+ * 为部件的所有材质创建独立副本，便于单独修改样式
+ */
 const isolateMaterials = (part: THREE.Object3D | undefined) => {
   part?.traverse((node) => {
     if (node instanceof THREE.Mesh && node.material) {
       node.material = Array.isArray(node.material)
-        ? node.material.map((m) => m.clone())
+        ? node.material.map((material) => material.clone())
         : node.material.clone();
     }
   });
 };
 
-/** 应用材质样式 */
+/**
+ * 设置部件的可见性，并统一应用颜色、粗糙度、金属度样式
+ */
 const setPartStyle = (
   part: THREE.Object3D | undefined,
   style: { color: string; rough: number; metal: number },
@@ -137,40 +150,59 @@ const setPartStyle = (
   part.visible = visible;
   part.traverse((node) => {
     if (node instanceof THREE.Mesh) {
-      const mats = Array.isArray(node.material)
+      const materials = Array.isArray(node.material)
         ? node.material
         : [node.material];
-      mats.forEach((m) => {
-        if (m instanceof THREE.MeshStandardMaterial) {
-          m.color.set(style.color);
-          m.roughness = style.rough;
-          m.metalness = style.metal;
+      materials.forEach((material) => {
+        if (material instanceof THREE.MeshStandardMaterial) {
+          material.color.set(style.color);
+          material.roughness = style.rough;
+          material.metalness = style.metal;
         }
       });
     }
   });
 };
 
-// =================================================================
-// 主组件 (Main Component)
-// =================================================================
+// ---------- 主组件 ----------
 
+/**
+ * 碳纤维双头船桨定制页面
+ * 支持预设参数定制与自由方案提交，提供 3D 交互预览和 2D 细节放大视图
+ */
 export default function CarbonPaddleCustomization() {
   const { auth } = useAuth();
+
+  // ---- 状态管理 ----
+
+  /** 当前定制模式 */
   const [mode, setMode] = useState<CustomizationMode>("preset");
+
+  /** 预设配置数据 */
   const [config, setConfig] = useState<PaddleConfig>(INITIAL_CONFIG);
+
+  /** 自由定制描述 */
   const [freeform, setFreeform] = useState<FreeformState>({
     designDescription: "",
+    referenceImagePath: "",
+    referenceImageUrl: "",
+    referenceImageName: "",
   });
+
+  /** 订单联系表单 */
   const [orderForm, setOrderForm] = useState<OrderFormState>({
     contactName: "",
     contactPhone: "",
     shippingAddress: "",
   });
 
-  // ---- 预览相关状态 ----
+  /** 当前预览视图：3D 交互或 2D 详情 */
   const [viewType, setViewType] = useState<"3d" | "2d">("3d");
+
+  /** 2D 放大镜的缩放倍率 */
   const [zoom, setZoom] = useState(2.2);
+
+  /** 放大镜位置与可见性状态 */
   const [magnifier, setMagnifier] = useState<MagnifierState>({
     lensX: 0,
     lensY: 0,
@@ -178,20 +210,32 @@ export default function CarbonPaddleCustomization() {
     sampleY: 0,
     visible: false,
   });
+
+  /** 图片实际渲染像素尺寸 */
   const [imageRenderSize, setImageRenderSize] = useState<ImageRenderSize>({
     width: 0,
     height: 0,
   });
+
+  /** 3D 资源加载状态 */
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
     "loading",
   );
+
+  /** 用于触发依赖模型加载完成后重新应用样式的版本号 */
   const [modelRevision, setModelRevision] = useState(0);
 
-  // Three.js 引用
+  // ---- Refs ----
+
+  /** 3D 预览容器 DOM */
   const previewRef = useRef<HTMLDivElement>(null);
+  /** 2D 图片外部容器 */
   const imageContainerRef = useRef<HTMLDivElement>(null);
+  /** 2D 图片 img 元素 */
   const imageRef = useRef<HTMLImageElement>(null);
+  /** 存储当前加载的模型部件引用 */
   const partsRef = useRef<PaddleModelParts | null>(null);
+  /** 存储当前 Three.js 场景及其渲染相关对象 */
   const sceneElements = useRef<{
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
@@ -199,48 +243,39 @@ export default function CarbonPaddleCustomization() {
     controls: OrbitControls;
   } | null>(null);
 
-  // 2D 预览图路径（后续替换为真实划船桨图片）
-  const IMAGE_2D_SOURCE = "/Carbon-Canoe-Paddle.jpg";
-  const MAGNIFIER_SIZE = 170;
+  // ---- 派生状态：价格明细 ----
 
-  // ---- 价格计算 ----
+  /** 根据当前配置动态计算价格明细 */
   const pricing = useMemo(() => {
-    const lines = [{ label: "基础碳纤维划船桨", amount: 2680 }];
+    const lines = [{ label: "基础可拆分双头碳纤维船桨", amount: 2280 }];
     lines.push({
-      label: `长度定制(${config.lengthCm}cm)`,
+      label: `长度定制 (${config.lengthCm}cm)`,
       amount: (config.lengthCm - 220) * 28,
     });
-    lines.push({
-      label: `轻量化调校(${config.paddleWeightG}g)`,
-      amount: Math.round((640 - config.paddleWeightG) * 2.5),
-    });
 
-    if (config.bladeShape === "rectangular") {
-      lines.push({ label: "矩形桨叶升级", amount: 180 });
+    if (config.shaftFlex === "stiff") {
+      lines.push({ label: "高响应硬轴调校", amount: 160 });
     }
-    if (config.shaftFlex === "soft") {
-      lines.push({ label: "柔性桨杆调校", amount: 220 });
-    }
-    if (config.gripStyle === "anti-slip") {
-      lines.push({ label: "防滑握柄升级", amount: 140 });
-    }
-    if (config.finishStyle !== "raw-carbon") {
-      lines.push({ label: "定制表面涂装", amount: 260 });
-    }
-    if (config.accessoryPack === "pro") {
-      lines.push({ label: "专业附件包", amount: 420 });
+
+    if (config.finishStyle !== "matte-carbon") {
+      lines.push({ label: "定制表面涂装", amount: 220 });
     }
 
     return { lines, total: lines.reduce((sum, line) => sum + line.amount, 0) };
   }, [config]);
 
-  // ---- 初始化 3D 场景与模型加载 ----
+  // ---- 副作用：初始化/销毁 Three.js 3D 场景 ----
+
   useEffect(() => {
+    // 仅在预设模式下挂载 3D 场景
     if (mode !== "preset" || !previewRef.current) return;
+
     const mount = previewRef.current;
 
-    // 1. 基础场景
+    // 创建场景
     const scene = new THREE.Scene();
+
+    // 透视相机
     const camera = new THREE.PerspectiveCamera(
       45,
       mount.clientWidth / mount.clientHeight,
@@ -250,37 +285,42 @@ export default function CarbonPaddleCustomization() {
     camera.position.set(1.2, 0.8, 1.5);
     camera.lookAt(0, 0, 0);
 
+    // WebGL 渲染器
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     mount.appendChild(renderer.domElement);
 
+    // 轨道控制器，支持旋转/缩放
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 0.5;
-    controls.maxDistance = 4;
-    controls.autoRotateSpeed = 1.0;
+    controls.maxDistance = 8;
+    controls.autoRotateSpeed = 1;
 
-    // 2. 光照
+    // 基础光源
     scene.add(
       new THREE.AmbientLight(0xffffff, 0.8),
       new THREE.DirectionalLight(0xffffff, 1),
     );
 
+    // 用 Group 包裹模型，方便整体旋转/缩放
     const paddleGroup = new THREE.Group();
     paddleGroup.rotation.set(...MODEL_SOURCE.baseRotation);
     scene.add(paddleGroup);
 
+    // 保存场景对象引用
     sceneElements.current = { renderer, scene, camera, controls };
 
-    // 3. 加载模型
+    // 加载 GLB 模型
     new GLTFLoader().load(
       MODEL_SOURCE.url,
       (gltf) => {
         const root = gltf.scene;
         paddleGroup.add(root);
 
+        // 尝试查找模型中的各个命名部件
         const parts: PaddleModelParts = {
           root,
           blade1: findNode(root, "blade1"),
@@ -291,24 +331,24 @@ export default function CarbonPaddleCustomization() {
           joint2: findNode(root, "joint2"),
         };
 
-        // 克隆子部件材质以独立控制
-        if (parts.blade1) isolateMaterials(parts.blade1);
-        if (parts.blade2) isolateMaterials(parts.blade2);
-        if (parts.shaft1) isolateMaterials(parts.shaft1);
-        if (parts.shaft2) isolateMaterials(parts.shaft2);
-        if (parts.joint1) isolateMaterials(parts.joint1);
-        if (parts.joint2) isolateMaterials(parts.joint2);
+        // 为每个部件创建独立材质，避免共享影响
+        isolateMaterials(parts.blade1);
+        isolateMaterials(parts.blade2);
+        isolateMaterials(parts.shaft1);
+        isolateMaterials(parts.shaft2);
+        isolateMaterials(parts.joint1);
+        isolateMaterials(parts.joint2);
 
         partsRef.current = parts;
         setLoadState("ready");
-        setModelRevision((prev) => prev + 1);
+        setModelRevision((prev) => prev + 1); // 触发样式更新
       },
       undefined,
       () => setLoadState("error"),
     );
 
-    // 4. 渲染循环
-    let frameId: number;
+    // 动画循环
+    let frameId = 0;
     const animate = () => {
       controls.update();
       renderer.render(scene, camera);
@@ -316,6 +356,7 @@ export default function CarbonPaddleCustomization() {
     };
     animate();
 
+    // 清理函数：组件卸载或切换模式时销毁 Three.js 资源
     return () => {
       cancelAnimationFrame(frameId);
       controls.dispose();
@@ -323,18 +364,20 @@ export default function CarbonPaddleCustomization() {
       scene.clear();
       partsRef.current = null;
       sceneElements.current = null;
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       mount.removeChild(renderer.domElement);
     };
   }, [mode]);
 
-  // 当 viewType 或 mode 变化时同步 controls 及相机比例
+  // ---- 副作用：响应视图模式切换，更新控制器与相机 ----
+
   useEffect(() => {
     const current = sceneElements.current;
     const mount = previewRef.current;
     if (!current || !mount) return;
 
+    // 仅在 3D 预设模式且视图为 3D 时启用轨道控制
     current.controls.enabled = mode === "preset" && viewType === "3d";
+
     if (mode === "preset" && viewType === "3d" && mount.clientHeight > 0) {
       current.camera.aspect = mount.clientWidth / mount.clientHeight;
       current.camera.updateProjectionMatrix();
@@ -343,74 +386,38 @@ export default function CarbonPaddleCustomization() {
     current.renderer.render(current.scene, current.camera);
   }, [mode, viewType]);
 
-  // ---- 响应配置变更，更新模型材质与缩放 ----
+  // ---- 副作用：预设模式下根据配置更新 3D 模型的外观 ----
+
   useEffect(() => {
     const parts = partsRef.current;
     if (mode !== "preset" || !parts || loadState !== "ready") return;
 
-    // 长度缩放 (假设模型原始尺寸对应 220cm)
+    // 通过缩放根节点模拟船桨长度变化
     const lengthScale = config.lengthCm / 220;
     parts.root.scale.set(1, 1, 1);
-    if (MODEL_SOURCE.lengthAxis === "y") {
-      parts.root.scale.y = lengthScale;
-    }
+    parts.root.scale.z = lengthScale;
 
-    // 涂装颜色应用到 blade 和 shaft
-    const finish =
-      FINISH_STYLES[config.finishStyle] || FINISH_STYLES["raw-carbon"];
+    // 应用选中的表面处理样式
+    const finish = FINISH_STYLES[config.finishStyle];
     setPartStyle(parts.blade1, finish);
-    setPartStyle(parts.shaft1, finish);
     setPartStyle(parts.blade2, finish);
+    setPartStyle(parts.shaft1, finish);
     setPartStyle(parts.shaft2, finish);
 
-    // 强制渲染
+    // 根据拆分结构设置连接件样式
+    const jointStyle = { color: "#7e8790", rough: 0.35, metal: 0.55 };
+    setPartStyle(parts.joint1, jointStyle);
+    setPartStyle(parts.joint2, jointStyle);
+
+    // 立即渲染一帧
     sceneElements.current?.renderer.render(
       sceneElements.current.scene,
       sceneElements.current.camera,
     );
-  }, [config, mode, loadState, modelRevision]);
+  }, [config, loadState, mode, modelRevision]);
 
-  // ---- 订单提交 ----
-  const handleSubmit = async () => {
-    if (!auth.isLoggedIn) {
-      alert("请先登录");
-      return;
-    }
+  // ---- 副作用：监听 2D 图片渲染尺寸变化（用于放大镜计算） ----
 
-    const { contactName, contactPhone, shippingAddress } = orderForm;
-    if (!contactName || !contactPhone || !shippingAddress) {
-      alert("请完善联系信息");
-      return;
-    }
-
-    try {
-      const payload =
-        mode === "preset"
-          ? {
-              customization_mode: "preset",
-              contact_name: contactName,
-              contact_phone: contactPhone,
-              shipping_address: shippingAddress,
-              config,
-            }
-          : {
-              customization_mode: "freeform",
-              contact_name: contactName,
-              contact_phone: contactPhone,
-              shipping_address: shippingAddress,
-              design_description: freeform.designDescription,
-              design_image_path: null,
-            };
-
-      await api.post("/orders/carbon-paddle", payload);
-      alert("订单提交成功！");
-    } catch (error) {
-      console.error("submit carbon paddle order failed:", error);
-      alert("提交失败，请检查网络或稍后重试");
-    }
-  };
-
-  // ---- 2D 图片相关逻辑 ----
   useEffect(() => {
     const image = imageRef.current;
     if (!image) return;
@@ -425,9 +432,14 @@ export default function CarbonPaddleCustomization() {
     const observer = new ResizeObserver(updateSize);
     observer.observe(image);
     return () => observer.disconnect();
-  }, [viewType, mode]);
+  }, [mode, viewType]);
 
-  const handleMagnifierMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  // ---- 事件处理 ----
+
+  /**
+   * 鼠标在 2D 图片容器上移动时，更新放大镜的位置和采样区域
+   */
+  const handleMagnifierMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const container = imageContainerRef.current;
     const image = imageRef.current;
     if (!container || !image) return;
@@ -436,13 +448,16 @@ export default function CarbonPaddleCustomization() {
     const imageRect = image.getBoundingClientRect();
     const lensRadius = MAGNIFIER_SIZE / 2;
 
-    const pointerX = e.clientX - containerRect.left;
-    const pointerY = e.clientY - containerRect.top;
-    const relativeImageX = e.clientX - imageRect.left;
-    const relativeImageY = e.clientY - imageRect.top;
+    // 指针相对于容器的坐标
+    const pointerX = event.clientX - containerRect.left;
+    const pointerY = event.clientY - containerRect.top;
+    // 指针相对于图片的坐标
+    const relativeImageX = event.clientX - imageRect.left;
+    const relativeImageY = event.clientY - imageRect.top;
     const imageLeft = imageRect.left - containerRect.left;
     const imageTop = imageRect.top - containerRect.top;
 
+    // 镜头的移动范围限制在图片边界内
     const lensMinX = Math.min(
       imageLeft + lensRadius,
       imageLeft + imageRect.width / 2,
@@ -471,26 +486,120 @@ export default function CarbonPaddleCustomization() {
       sampleX,
       sampleY,
       visible:
-        e.clientX >= imageRect.left &&
-        e.clientX <= imageRect.right &&
-        e.clientY >= imageRect.top &&
-        e.clientY <= imageRect.bottom,
+        event.clientX >= imageRect.left &&
+        event.clientX <= imageRect.right &&
+        event.clientY >= imageRect.top &&
+        event.clientY <= imageRect.bottom,
     });
   };
 
+  /** 鼠标离开图片容器时隐藏放大镜 */
   const handleMagnifierLeave = () => {
     setMagnifier((prev) => ({ ...prev, visible: false }));
   };
 
-  // ---- JSX ----
+  /**
+   * 提交订单，需要登录并填写完整联系信息
+   */
+  const handleSubmit = async () => {
+    if (!auth.isLoggedIn) {
+      alert("请先登录");
+      return;
+    }
+
+    const { contactName, contactPhone, shippingAddress } = orderForm;
+    if (!contactName || !contactPhone || !shippingAddress) {
+      alert("请完善联系信息");
+      return;
+    }
+
+    try {
+      const payload =
+        mode === "preset"
+          ? {
+              customization_mode: "preset",
+              contact_name: contactName,
+              contact_phone: contactPhone,
+              shipping_address: shippingAddress,
+              config,
+            }
+          : {
+              customization_mode: "freeform",
+              contact_name: contactName,
+              contact_phone: contactPhone,
+              shipping_address: shippingAddress,
+              design_description: freeform.designDescription,
+              design_image_path: freeform.referenceImagePath || null,
+            };
+
+      await api.post("/orders/carbon-paddle", payload);
+      alert("订单提交成功");
+    } catch (error) {
+      console.error("submit carbon paddle order failed:", error);
+      alert("提交失败，请稍后重试");
+    }
+  };
+
+  /**
+   * 自由定制参考图上传：
+   * 先显示本地预览，再将文件上传到后端并回填服务器路径。
+   */
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const localPreviewUrl = URL.createObjectURL(file);
+    setFreeform((prev) => {
+      if (prev.referenceImageUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.referenceImageUrl);
+      }
+      return {
+        ...prev,
+        referenceImageName: file.name,
+        referenceImagePath: "",
+        referenceImageUrl: localPreviewUrl,
+      };
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const response = await api.post("/images/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (response.data.success) {
+        setFreeform((prev) => ({
+          ...prev,
+          referenceImagePath: response.data.path,
+          referenceImageUrl: response.data.url,
+        }));
+      }
+    } catch (error) {
+      console.error("upload carbon paddle image failed:", error);
+      alert("图片上传失败，请重试");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (freeform.referenceImageUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(freeform.referenceImageUrl);
+      }
+    };
+  }, [freeform.referenceImageUrl]);
+
+  // ---- 渲染 ----
+
   return (
     <main className={styles.page}>
+      {/* 页面头部：标题与模式切换 */}
       <header className={styles.header}>
-        <h1>碳纤维划船桨定制</h1>
-        <p>
-          参考台球杆定制流程，当前 3D/2D
-          资源暂用占位文件，后续仅需替换真实划船桨模型与图片即可。
-        </p>
+        <h1>碳纤维双头船桨定制</h1>
+        <p>面向可拆分双头船桨的配置，预设项按巡航与海划场景重新整理。</p>
         <div className={styles.modeBar}>
           <button
             onClick={() => setMode("preset")}
@@ -502,34 +611,37 @@ export default function CarbonPaddleCustomization() {
             onClick={() => setMode("freeform")}
             className={mode === "freeform" ? styles.active : ""}
           >
-            自由方案
+            自由定制
           </button>
         </div>
       </header>
 
       <div className={styles.layout}>
+        {/* 左侧面板：配置参数或自由描述 */}
         <aside className={styles.panel}>
           {mode === "preset" ? (
             <div className={styles.controls}>
-              <h2>基础参数</h2>
+              <h2>配置参数</h2>
+
               <label>
-                适用项目:
+                使用场景:
                 <select
-                  value={config.discipline}
+                  value={config.use}
                   onChange={(event) =>
                     setConfig({
                       ...config,
-                      discipline: event.target.value as PaddleDiscipline,
+                      use: event.target.value as PaddleUse,
                     })
                   }
                 >
-                  <option value="sprint">竞速冲刺</option>
-                  <option value="marathon">长距离马拉松</option>
-                  <option value="touring">综合巡航</option>
+                  <option value="touring">休闲巡航</option>
+                  <option value="sea-touring">海划远行</option>
+                  <option value="fitness">训练健身</option>
                 </select>
               </label>
+
               <label>
-                总长度: {config.lengthCm} cm
+                长度: {config.lengthCm}cm
                 <input
                   type="range"
                   min="205"
@@ -544,55 +656,9 @@ export default function CarbonPaddleCustomization() {
                   }
                 />
               </label>
+
               <label>
-                桨叶宽度: {config.bladeWidthCm} cm
-                <input
-                  type="range"
-                  min="15"
-                  max="21"
-                  step="0.5"
-                  value={config.bladeWidthCm}
-                  onChange={(event) =>
-                    setConfig({
-                      ...config,
-                      bladeWidthCm: Number(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                整桨重量: {config.paddleWeightG} g
-                <input
-                  type="range"
-                  min="560"
-                  max="760"
-                  step="10"
-                  value={config.paddleWeightG}
-                  onChange={(event) =>
-                    setConfig({
-                      ...config,
-                      paddleWeightG: Number(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                桨叶形状:
-                <select
-                  value={config.bladeShape}
-                  onChange={(event) =>
-                    setConfig({
-                      ...config,
-                      bladeShape: event.target.value as BladeShape,
-                    })
-                  }
-                >
-                  <option value="teardrop">水滴形</option>
-                  <option value="rectangular">矩形高抓水</option>
-                </select>
-              </label>
-              <label>
-                桨杆弹性:
+                桨杆硬度:
                 <select
                   value={config.shaftFlex}
                   onChange={(event) =>
@@ -602,27 +668,11 @@ export default function CarbonPaddleCustomization() {
                     })
                   }
                 >
-                  <option value="stiff">硬弹性</option>
-                  <option value="medium">中弹性</option>
-                  <option value="soft">柔弹性 (+¥220)</option>
+                  <option value="medium">中等回弹</option>
+                  <option value="stiff">硬轴响应 (+¥160)</option>
                 </select>
               </label>
-              <label>
-                握柄结构:
-                <select
-                  value={config.gripStyle}
-                  onChange={(event) =>
-                    setConfig({
-                      ...config,
-                      gripStyle: event.target.value as GripStyle,
-                    })
-                  }
-                >
-                  <option value="ergonomic">人体工学</option>
-                  <option value="straight">直柄</option>
-                  <option value="anti-slip">防滑包覆 (+¥140)</option>
-                </select>
-              </label>
+
               <label>
                 表面处理:
                 <select
@@ -634,34 +684,19 @@ export default function CarbonPaddleCustomization() {
                     })
                   }
                 >
-                  <option value="raw-carbon">原生碳纹</option>
-                  <option value="satin-carbon">缎面碳纹 (+¥260)</option>
-                  <option value="racing-red">竞速红涂装 (+¥260)</option>
+                  <option value="matte-carbon">磨砂碳纹</option>
+                  <option value="satin-carbon">缎面碳纹 (+¥220)</option>
+                  <option value="glacier-white">冰川白涂装 (+¥220)</option>
                 </select>
               </label>
-              <label>
-                附件包:
-                <select
-                  value={config.accessoryPack}
-                  onChange={(event) =>
-                    setConfig({
-                      ...config,
-                      accessoryPack: event.target.value as AccessoryPack,
-                    })
-                  }
-                >
-                  <option value="none">无</option>
-                  <option value="entry">基础保养包</option>
-                  <option value="pro">专业附件包 (+¥420)</option>
-                </select>
-              </label>
+
             </div>
           ) : (
             <div className={styles.freeform}>
               <h2>自由定制需求</h2>
               <textarea
                 rows={6}
-                placeholder="描述您的桨叶结构、编织方向、品牌图案或使用场景..."
+                placeholder="描述您期望的桨叶外形、桨杆结构、使用水域或训练需求...可以选择上传设计图"
                 value={freeform.designDescription}
                 onChange={(event) =>
                   setFreeform({
@@ -670,14 +705,20 @@ export default function CarbonPaddleCustomization() {
                   })
                 }
               />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+              />
             </div>
           )}
         </aside>
 
-        {/* ---- 预览区域 ---- */}
+        {/* 中间预览区域 */}
         <section className={styles.previewPanel}>
           {mode === "preset" ? (
             <>
+              {/* 视图切换栏 */}
               <div className={styles.viewToggleBar}>
                 <button
                   className={viewType === "3d" ? styles.activeView : ""}
@@ -692,8 +733,9 @@ export default function CarbonPaddleCustomization() {
                   2D 详情
                 </button>
               </div>
+
               <div className={styles.previewStack}>
-                {/* 3D 视图 */}
+                {/* 3D 预览容器 */}
                 <div
                   className={`${styles.preview} ${
                     viewType === "3d"
@@ -702,7 +744,8 @@ export default function CarbonPaddleCustomization() {
                   }`}
                   ref={previewRef}
                 />
-                {/* 2D 视图 */}
+
+                {/* 2D 图片预览及放大镜 */}
                 <div
                   className={`${styles.imageViewer} ${
                     viewType === "2d"
@@ -719,7 +762,7 @@ export default function CarbonPaddleCustomization() {
                   >
                     <img
                       src={IMAGE_2D_SOURCE}
-                      alt="划船桨 2D 预览"
+                      alt="双头船桨 2D 预览"
                       className={styles.staticImage}
                       ref={imageRef}
                       onLoad={() =>
@@ -729,6 +772,7 @@ export default function CarbonPaddleCustomization() {
                         })
                       }
                     />
+                    {/* 放大镜镜头 */}
                     {magnifier.visible && (
                       <div
                         className={styles.magnifierLens}
@@ -743,13 +787,17 @@ export default function CarbonPaddleCustomization() {
                           }px`,
                           backgroundPosition: `${
                             MAGNIFIER_SIZE / 2 - magnifier.sampleX * zoom
-                          }px ${MAGNIFIER_SIZE / 2 - magnifier.sampleY * zoom}px`,
+                          }px ${
+                            MAGNIFIER_SIZE / 2 - magnifier.sampleY * zoom
+                          }px`,
                         }}
                       >
                         <span className={styles.magnifierCrosshair} />
                       </div>
                     )}
                   </div>
+
+                  {/* 缩放控制滑块 */}
                   <div className={styles.zoomControls}>
                     <span>弱</span>
                     <input
@@ -758,7 +806,9 @@ export default function CarbonPaddleCustomization() {
                       max="4"
                       step="0.1"
                       value={zoom}
-                      onChange={(e) => setZoom(parseFloat(e.target.value))}
+                      onChange={(event) =>
+                        setZoom(parseFloat(event.target.value))
+                      }
                     />
                     <span>强</span>
                     <button onClick={() => setZoom(2.2)}>重置</button>
@@ -768,42 +818,58 @@ export default function CarbonPaddleCustomization() {
             </>
           ) : (
             <div className={styles.freeformPreview}>
-              <h2>自由方案预览</h2>
-              <div className={styles.imagePreviewContainer}>
-                <img
-                  src={IMAGE_2D_SOURCE}
-                  alt="自由方案占位预览"
-                  className={styles.previewImage}
-                />
-              </div>
-              <p className={styles.imageCaption}>
-                当前使用占位图，后续将支持上传设计草图或效果图预览。
-              </p>
+              <h2>设计方案预览</h2>
+              {freeform.referenceImageUrl ? (
+                <div className={styles.imagePreviewContainer}>
+                  <img
+                    src={freeform.referenceImageUrl}
+                    alt="设计参考图"
+                    className={styles.previewImage}
+                  />
+                  <p className={styles.imageCaption}>
+                    {freeform.referenceImageName}
+                  </p>
+                </div>
+              ) : (
+                <div className={styles.placeholder}>
+                  <p>请上传设计草图以查看预览</p>
+                </div>
+              )}
             </div>
           )}
         </section>
 
+        {/* 右侧面板：价格明细与订单表单 */}
         <aside className={styles.pricePanel}>
           {mode === "preset" ? (
-            <div className={styles.priceInfo}>
+            <div>
               <div className={styles.total}>
                 {CURRENCY.format(pricing.total)}
               </div>
+              <div className={styles.priceListTitle}>费用明细</div>
               <ul className={styles.priceList}>
                 {pricing.lines.map((line) => (
                   <li key={line.label}>
-                    <span>{line.label}</span>
-                    <span>{CURRENCY.format(line.amount)}</span>
+                    <span className={styles.priceLabel}>{line.label}</span>
+                    <span
+                      className={`${styles.priceAmount} ${
+                        line.amount > 0 ? styles.positive : ""
+                      }`}
+                    >
+                      {CURRENCY.format(line.amount)}
+                    </span>
                   </li>
                 ))}
               </ul>
             </div>
           ) : (
-            <div className={styles.priceNotice}>价格将由人工评估后报价</div>
+            <div className={styles.priceNotice}>
+              价格：自由方案将由人工评估报价
+            </div>
           )}
 
+          {/* 联系信息表单 */}
           <div className={styles.orderForm}>
-            <h2>联系信息</h2>
             <input
               placeholder="联系人"
               value={orderForm.contactName}
@@ -819,7 +885,7 @@ export default function CarbonPaddleCustomization() {
               }
             />
             <textarea
-              placeholder="收货地址"
+              placeholder="地址"
               value={orderForm.shippingAddress}
               onChange={(event) =>
                 setOrderForm({

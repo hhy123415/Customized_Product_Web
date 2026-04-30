@@ -3,7 +3,12 @@
   min-height: calc(100vh - 68px);
   padding: 28px 20px 40px;
   box-sizing: border-box;
-  background: radial-gradient(circle at top, #f4f8fb 0%, #ebf0f4 42%, #e3e9ef 100%);
+  background: radial-gradient(
+    circle at top,
+    #f4f8fb 0%,
+    #ebf0f4 42%,
+    #e3e9ef 100%
+  );
 }
 
 .header {
@@ -51,7 +56,9 @@
 }
 
 /* 通用面板容器 */
-.panel, .previewPanel, .pricePanel {
+.panel,
+.previewPanel,
+.pricePanel {
   background: #ffffff;
   border: 1px solid #d7e2eb;
   border-radius: 14px;
@@ -59,20 +66,25 @@
   box-shadow: 0 8px 20px rgba(10, 45, 72, 0.06);
 }
 
-.panel h2, .previewPanel h2, .pricePanel h2 {
+.panel h2,
+.previewPanel h2,
+.pricePanel h2 {
   margin: 0 0 16px;
   font-size: 18px;
   color: #133b56;
 }
 
 /* 表单与输入项 */
-.controls, .freeform, .orderForm {
+.controls,
+.freeform,
+.orderForm {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.controls label, .freeform label {
+.controls label,
+.freeform label {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -85,7 +97,10 @@
   accent-color: #1778af;
 }
 
-.controls select, .orderForm input, .orderForm textarea, .freeform textarea {
+.controls select,
+.orderForm input,
+.orderForm textarea,
+.freeform textarea {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid #c5d8e5;
@@ -246,6 +261,57 @@
   cursor: pointer;
 }
 
+.freeformPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 500px;
+}
+
+.imagePreviewContainer,
+.placeholder {
+  flex: 1;
+  min-height: 0;
+  border-radius: 12px;
+  border: 1px solid #d7e2eb;
+  background:
+    linear-gradient(135deg, rgba(24, 90, 130, 0.05), rgba(24, 90, 130, 0.02)),
+    #f7fbff;
+  overflow: hidden;
+}
+
+.imagePreviewContainer {
+  display: flex;
+  flex-direction: column;
+}
+
+.previewImage {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  object-fit: contain;
+  background: #f7fbff;
+}
+
+.imageCaption {
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 1px solid #d7e2eb;
+  background: rgba(255, 255, 255, 0.92);
+  color: #3e6178;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #6b8ba0;
+  text-align: center;
+}
+
 .freeformPlaceholder {
   height: 500px;
   background: #f8f9fa;
@@ -259,59 +325,197 @@
 }
 
 /* 价格面板逻辑隔离样式 */
+/* 价格面板逻辑隔离样式 */
 .total {
-  font-size: 32px;
-  color: #0e5a85;
+  font-size: 42px;
   font-weight: 800;
-  margin-bottom: 12px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0a3f5c 0%, #156fa0 40%, #1c7eb0 70%, #2a9fd4 100%);
+  padding: 18px 20px;
+  border-radius: 16px;
+  margin: 0 0 24px 0;
+  text-align: center;
+  letter-spacing: 1.5px;
+  box-shadow:
+    0 8px 24px rgba(10, 63, 92, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.total::before {
+  content: "";
+  position: absolute;
+  top: -40%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.total::after {
+  content: "订单总价";
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
 }
 
 .priceList {
   list-style: none;
   padding: 0;
-  margin: 0 0 20px;
+  margin: 0 0 28px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbfe 0%, #f0f6fa 100%);
+  border: 1px solid #dce8f0;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(10, 45, 72, 0.04);
 }
 
 .priceList li {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   font-size: 14px;
-  padding: 8px 0;
-  border-bottom: 1px dashed #dbe5ee;
+  padding: 14px 16px 14px 44px;
+  border-bottom: 1px solid rgba(215, 226, 237, 0.6);
   color: #2f536a;
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: default;
 }
 
+.priceList li:last-child {
+  border-bottom: none;
+}
+
+.priceList li:hover {
+  background: linear-gradient(90deg, rgba(23, 120, 175, 0.06) 0%, rgba(23, 120, 175, 0.02) 100%);
+  padding-left: 48px;
+}
+
+.priceList li::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(135deg, #1778af, #2a9fd4);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(23, 120, 175, 0.3);
+  transition: all 0.25s ease;
+}
+
+.priceList li:hover::before {
+  transform: translateY(-50%) scale(1.3);
+  box-shadow: 0 3px 10px rgba(23, 120, 175, 0.45);
+}
+
+.priceList li span {
+  font-weight: 700;
+  color: #0e2f45;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+.priceList li .priceLabel {
+  font-weight: 500;
+  color: #3e6178;
+}
+
+.priceList li .priceAmount {
+  font-weight: 700;
+  color: #0e2f45;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(135deg, #0a3f5c, #1778af);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.priceList li .priceAmount.positive {
+  background: linear-gradient(135deg, #0a7a3e, #1db954);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 价格列表标题 */
+.priceListTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #5a7d94;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin: 0 0 12px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.priceListTitle::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  background: linear-gradient(180deg, #1778af, #2a9fd4);
+  border-radius: 2px;
+}
+/* 自由定制时的提示卡片 */
 .priceNotice {
-  padding: 16px;
-  background: #fff4e6;
-  border-radius: 8px;
-  color: #d9480f;
+  margin: 16px 0 24px;
+  padding: 16px 18px;
+  background: #fffaf3;
+  border-left: 4px solid #f0a04b;
+  border-radius: 10px;
+  color: #b85e0c;
   font-weight: 600;
-  margin-bottom: 20px;
 }
 
-/* 订单按钮 */
 .orderButton {
-  margin-top: 10px;
+  margin-top: 8px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #0f6e9d 0%, #1992c6 100%);
   color: #ffffff;
-  padding: 14px;
-  font-size: 16px;
+  padding: 16px;
+  font-size: 17px;
   font-weight: 700;
+  letter-spacing: 0.5px;
   cursor: pointer;
+  box-shadow: 0 6px 14px rgba(15, 110, 157, 0.25);
+  transition:
+    opacity 0.2s,
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .orderButton:hover {
-  opacity: 0.9;
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 110, 157, 0.35);
+}
+
+.orderButton:active {
+  transform: translateY(0);
 }
 
 /* 响应式适配 */
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 1fr; }
+  .layout {
+    grid-template-columns: 1fr;
+  }
   .preview,
   .freeformPlaceholder,
+  .freeformPreview,
+  .imagePreviewContainer,
+  .placeholder,
   .imageContainer,
   .previewStack {
     height: 400px;

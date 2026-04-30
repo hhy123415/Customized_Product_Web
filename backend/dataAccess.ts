@@ -243,12 +243,39 @@ export const db = {
     passwordHash: string;
     email: string;
     role: string;
-  }): Promise<void> {
-    const { username, passwordHash, email, role } = params;
-    await pool.query(
-      "INSERT INTO users (username, password_hash, email, role) VALUES ($1, $2, $3, $4)",
-      [username, passwordHash, email, role],
-    );
+    points: number;
+  }): Promise<number> {
+    const { username, passwordHash, email, role, points } = params;
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      // 1. 创建用户
+      const userResult = await client.query<{ user_id: number }>(
+        `INSERT INTO users (username, password_hash, email, role)
+       VALUES ($1, $2, $3, $4)
+       RETURNING user_id`,
+        [username, passwordHash, email, role],
+      );
+      const userId = userResult.rows[0].user_id;
+
+      // 2. 插入积分赠送记录
+      //    触发器 trg_point_records_sync_points 会自动将 users.points 设为 points
+      await client.query(
+        `INSERT INTO point_records (user_id, points_change, points_after, detail)
+       VALUES ($1, $2, $3, '注册赠送')`,
+        [userId, points, points],
+      );
+
+      await client.query("COMMIT");
+      return userId;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   /** 执行用户签到逻辑（包含事务处理、连续签到天数计算及积分发放） */
@@ -272,14 +299,14 @@ export const db = {
       // 查询最近一次签到记录
       const latestResult = await client.query<UserCheckInStatusRow>(
         `
-          SELECT
-            TO_CHAR(check_in_date, 'YYYY-MM-DD') AS last_check_in_date,
-            streak_count AS current_streak
-          FROM user_check_ins
-          WHERE user_id = $1
-          ORDER BY check_in_date DESC, check_in_id DESC
-          LIMIT 1
-        `,
+        SELECT
+          TO_CHAR(check_in_date, 'YYYY-MM-DD') AS last_check_in_date,
+          streak_count AS current_streak
+        FROM user_check_ins
+        WHERE user_id = $1
+        ORDER BY check_in_date DESC, check_in_id DESC
+        LIMIT 1
+      `,
         [userId],
       );
 
@@ -291,19 +318,19 @@ export const db = {
       // 检查今天是否已签到
       const alreadyCheckedResult = await client.query<UserCheckInRow>(
         `
-          SELECT
-            check_in_id,
-            user_id,
-            TO_CHAR(check_in_date, 'YYYY-MM-DD') AS check_in_date,
-            streak_count,
-            base_points,
-            bonus_points,
-            total_points,
-            created_at
-          FROM user_check_ins
-          WHERE user_id = $1 AND check_in_date = CURRENT_DATE
-          LIMIT 1
-        `,
+        SELECT
+          check_in_id,
+          user_id,
+          TO_CHAR(check_in_date, 'YYYY-MM-DD') AS check_in_date,
+          streak_count,
+          base_points,
+          bonus_points,
+          total_points,
+          created_at
+        FROM user_check_ins
+        WHERE user_id = $1 AND check_in_date = CURRENT_DATE
+        LIMIT 1
+      `,
         [userId],
       );
 
@@ -344,24 +371,34 @@ export const db = {
       // 插入签到记录
       const checkInResult = await client.query<UserCheckInRow>(
         `
-          INSERT INTO user_check_ins (user_id, check_in_date, streak_count, base_points, bonus_points, total_points)
-          VALUES ($1, CURRENT_DATE, $2, $3, $4, $5)
-          RETURNING
-            check_in_id, user_id, TO_CHAR(check_in_date, 'YYYY-MM-DD') AS check_in_date,
-            streak_count, base_points, bonus_points, total_points, created_at
-        `,
+        INSERT INTO user_check_ins (user_id, check_in_date, streak_count, base_points, bonus_points, total_points)
+        VALUES ($1, CURRENT_DATE, $2, $3, $4, $5)
+        RETURNING
+          check_in_id, user_id, TO_CHAR(check_in_date, 'YYYY-MM-DD') AS check_in_date,
+          streak_count, base_points, bonus_points, total_points, created_at
+      `,
         [userId, nextStreak, basePoints, bonusPoints, totalPoints],
       );
 
-      // 更新用户总积分
+      // 查询当前用户积分，用于计算变动后的余额
+      const currentPointsResult = await client.query<{ points: number }>(
+        "SELECT points FROM users WHERE user_id = $1 FOR UPDATE",
+        [userId],
+      );
+      const currentPoints = Number(currentPointsResult.rows[0]?.points || 0);
+      const pointsAfter = currentPoints + totalPoints;
+
+      // 插入积分变动记录（触发器会自动将 users.points 更新为 points_after）
+      await client.query(
+        `INSERT INTO point_records (user_id, points_change, points_after, detail)
+       VALUES ($1, $2, $3, '签到')`,
+        [userId, totalPoints, pointsAfter],
+      );
+
+      // 获取更新后的用户信息（可选，用于返回准确的积分）
       const userResult = await client.query<UserRow>(
-        `
-          UPDATE users
-          SET points = COALESCE(points, 0) + $1
-          WHERE user_id = $2
-          RETURNING *
-        `,
-        [totalPoints, userId],
+        "SELECT * FROM users WHERE user_id = $1 LIMIT 1",
+        [userId],
       );
 
       await client.query("COMMIT");

@@ -13,11 +13,23 @@ function ProductCustomization() {
 
       <section className={styles.grid}>
         <Link to="/product-customization/pool-cue" className={styles.card}>
+          <img
+            src="cue-2d-preview.jpg"
+            alt="碳纤维台球杆定制预览"
+            className={styles.cardImage}
+            loading="lazy"
+          />
           <h2>碳纤维台球杆定制</h2>
           <span className={styles.cta}>进入定制</span>
         </Link>
 
         <Link to="/product-customization/carbon-paddle" className={styles.card}>
+          <img
+            src="Carbon-Canoe-Paddle.jpg"
+            alt="碳纤维划船桨定制预览"
+            className={styles.cardImage}
+            loading="lazy"
+          />
           <h2>碳纤维划船桨定制</h2>
           <span className={styles.cta}>进入定制</span>
         </Link>

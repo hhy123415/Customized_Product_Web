@@ -201,89 +201,6 @@ const MAX_ORDER_NOTE_LENGTH = 500; // 订单备注最大长度
 // ==================== 辅助函数 ====================
 
 /**
- * 规范化台球杆配置参数并验证
- * @param {unknown} input - 原始配置数据
- * @returns {PoolCueOrderConfig} 验证后的配置对象
- * @throws {Error} 当配置无效时抛出错误
- */
-const normalizePoolCuePresetConfig = (
-  input: unknown,
-): PoolCuePresetOrderConfig => {
-  if (!input || typeof input !== "object") {
-    throw new Error("config is required");
-  }
-
-  const raw = input as Record<string, unknown>;
-  const lengthCm = Number(raw.lengthCm);
-  const weightOz = Number(raw.weightOz);
-  const tipDiameterMm = Number(raw.tipDiameterMm);
-  const jointType = String(raw.jointType || "").trim();
-  const wrapType = String(raw.wrapType || "").trim();
-  const finishStyle = String(raw.finishStyle || "").trim();
-  const caseOption = String(raw.caseOption || "").trim();
-
-  // 验证长度范围：142-150cm
-  if (!Number.isFinite(lengthCm) || lengthCm < 142 || lengthCm > 150) {
-    throw new Error("lengthCm is invalid");
-  }
-
-  // 验证重量范围：17-21oz，且必须为0.5的倍数
-  if (
-    !Number.isFinite(weightOz) ||
-    weightOz < 17 ||
-    weightOz > 21 ||
-    Math.round(weightOz * 2) !== weightOz * 2
-  ) {
-    throw new Error("weightOz is invalid");
-  }
-
-  // 验证杆头直径：只允许特定规格
-  if (![10, 10.5, 11, 11.5, 12].includes(tipDiameterMm)) {
-    throw new Error("tipDiameterMm is invalid");
-  }
-
-  // 验证接牙类型
-  if (!["stainless-steel", "titanium"].includes(jointType)) {
-    throw new Error("jointType is invalid");
-  }
-
-  // 验证握把类型
-  if (!["carbon-grip", "genuine-leather", "none"].includes(wrapType)) {
-    throw new Error("wrapType is invalid");
-  }
-
-  // 验证涂装样式
-  if (
-    ![
-      "matte-carbon",
-      "gloss-carbon",
-      "stealth-black",
-      "ice-silver",
-      "ocean-blue",
-      "crimson-red",
-    ].includes(finishStyle)
-  ) {
-    throw new Error("finishStyle is invalid");
-  }
-
-  // 验证球杆盒选项
-  if (!["none", "basic", "pro"].includes(caseOption)) {
-    throw new Error("caseOption is invalid");
-  }
-
-  return {
-    customizationMode: "preset",
-    lengthCm,
-    weightOz,
-    tipDiameterMm,
-    jointType: jointType as PoolCuePresetOrderConfig["jointType"],
-    wrapType: wrapType as PoolCuePresetOrderConfig["wrapType"],
-    finishStyle: finishStyle as PoolCuePresetOrderConfig["finishStyle"],
-    caseOption: caseOption as PoolCuePresetOrderConfig["caseOption"],
-  };
-};
-
-/**
  * 计算台球杆定制价格
  * @param {PoolCueOrderConfig} config - 台球杆配置
  * @returns {Object} 包含价格明细和总价的对象
@@ -329,40 +246,6 @@ const calculatePoolCuePrice = (
   };
 };
 
-const buildFreeformPoolCueOrder = (params: {
-  designDescription: string;
-  preferredText: string | null;
-  referenceImagePath: string | null;
-}): {
-  config: PoolCueOrderConfig;
-  lines: PoolCueOrderPriceLine[];
-  total: number;
-} => {
-  const { designDescription, preferredText, referenceImagePath } = params;
-  const lines: PoolCueOrderPriceLine[] = [
-    { label: "碳纤维球杆自由定制基础方案", amount: 2280 },
-  ];
-
-  if (referenceImagePath) {
-    lines.push({ label: "设计图解析与工艺评估", amount: 180 });
-  }
-
-  if (preferredText) {
-    lines.push({ label: "文字元素排版预处理", amount: 120 });
-  }
-
-  return {
-    config: {
-      customizationMode: "freeform",
-      designDescription,
-      preferredText,
-      referenceImagePath,
-    },
-    lines,
-    total: lines.reduce((sum, item) => sum + item.amount, 0),
-  };
-};
-
 /**
  * 计算划船桨定制价格
  */
@@ -377,30 +260,21 @@ const calculateCarbonPaddlePrice = (
   const finishStyle = String(config?.finishStyle || "raw-carbon");
   const accessoryPack = String(config?.accessoryPack || "none");
 
-  const lines = [{ label: "基础碳纤维划船桨", amount: 2680 }];
+  const lines = [{ label: "基础碳纤维划船桨", amount: 2280 }];
   lines.push({
     label: `长度定制(${lengthCm}cm)`,
     amount: (lengthCm - 220) * 28,
   });
-  lines.push({
-    label: `轻量化调校(${paddleWeightG}g)`,
-    amount: Math.round((640 - paddleWeightG) * 2.5),
-  });
-
-  if (bladeShape === "rectangular") {
-    lines.push({ label: "矩形桨叶升级", amount: 180 });
-  }
-  if (shaftFlex === "soft") {
-    lines.push({ label: "柔性桨杆调校", amount: 220 });
-  }
-  if (gripStyle === "anti-slip") {
-    lines.push({ label: "防滑握柄升级", amount: 140 });
+  if (shaftFlex === "stiff") {
+    lines.push({ label: "柔性桨杆调校", amount: 160 });
   }
   if (finishStyle !== "raw-carbon") {
-    lines.push({ label: "定制表面涂装", amount: 260 });
+    lines.push({ label: "定制表面涂装", amount: 220 });
   }
-  if (accessoryPack === "pro") {
-    lines.push({ label: "专业附件包", amount: 420 });
+  if (accessoryPack === "touring") {
+    lines.push({ label: "巡航收纳配件包", amount: 180 });
+  } else if (accessoryPack === "expedition") {
+    lines.push({ label: "远征配件包", amount: 360 });
   }
 
   return {
@@ -1542,6 +1416,7 @@ app.post("/api/verify-email-code", async (req: Request, res: Response) => {
 app.post("/api/register", async (req: Request, res: Response) => {
   const { username, password, email, registerCode, role, verificationCode } =
     req.body;
+  const points = 100; //注册赠送的积分
   const allowedRoles = ["regular", "enterprise", "admin"];
 
   try {
@@ -1606,6 +1481,7 @@ app.post("/api/register", async (req: Request, res: Response) => {
       passwordHash: hashedPassword,
       email,
       role,
+      points,
     });
 
     res.status(201).json({

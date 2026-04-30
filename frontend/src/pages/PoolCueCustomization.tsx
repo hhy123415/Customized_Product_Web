@@ -61,7 +61,6 @@ interface CueModelParts {
 
 const MODEL_SOURCE = {
   url: "/models/cue-carbon.glb",
-  lengthAxis: "y" as const,
   baseRotation: [0, 0, -Math.PI / 2] as [number, number, number],
 };
 
@@ -353,7 +352,7 @@ export default function PoolCueCustomization() {
     // A. 长度缩放更新
     const lScale = config.lengthCm / 147;
     p.root.scale.setScalar(1);
-    if (MODEL_SOURCE.lengthAxis === "y") p.root.scale.y = lScale;
+    p.root.scale.z = lScale;
 
     // B. 应用涂装样式 (前节与后把)
     const finish =
@@ -559,8 +558,8 @@ export default function PoolCueCustomization() {
                 长度: {config.lengthCm}cm{" "}
                 <input
                   type="range"
-                  min="142"
-                  max="150"
+                  min="132"
+                  max="160"
                   value={config.lengthCm}
                   onChange={(e) =>
                     setConfig({ ...config, lengthCm: +e.target.value })
@@ -661,7 +660,7 @@ export default function PoolCueCustomization() {
             <div className={styles.freeform}>
               <h2>自由定制需求</h2>
               <textarea
-                placeholder="描述您的设计想法..."
+                placeholder="描述您的设计想法...或是上传设计图"
                 value={freeform.designDescription}
                 onChange={(e) =>
                   setFreeform({
@@ -805,10 +804,16 @@ export default function PoolCueCustomization() {
               <div className={styles.total}>
                 {CURRENCY.format(pricing.total)}
               </div>
-              <ul>
+              <div className={styles.priceListTitle}>费用明细</div>
+              <ul className={styles.priceList}>
                 {pricing.lines.map((l) => (
                   <li key={l.label}>
-                    {l.label}: {CURRENCY.format(l.amount)}
+                    <span className={styles.priceLabel}>{l.label}</span>
+                    <span
+                      className={`${styles.priceAmount} ${l.amount > 0 ? styles.positive : ""}`}
+                    >
+                      {CURRENCY.format(l.amount)}
+                    </span>
                   </li>
                 ))}
               </ul>

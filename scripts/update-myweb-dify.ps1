@@ -28,6 +28,7 @@ if (Test-Path $difyOverride) {
   $difyComposeArgs += @("-f", $difyOverride)
 }
 
+docker compose @difyComposeArgs config | Out-Null
 docker compose @difyComposeArgs pull
 docker compose @difyComposeArgs up -d
 

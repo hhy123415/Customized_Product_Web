@@ -28,5 +28,6 @@ if (Test-Path $difyOverride) {
   $difyComposeArgs += @("-f", $difyOverride)
 }
 
+docker compose @difyComposeArgs config | Out-Null
 docker compose @difyComposeArgs up -d
 docker compose -f $mywebCompose up -d --build
