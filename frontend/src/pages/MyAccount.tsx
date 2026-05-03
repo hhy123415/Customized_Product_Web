@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import api from "../api/axios";
 import styles from "../css/MyAccount.module.css";
 import type { CheckInStatus, User_info, UserWork } from "../Interface";
@@ -45,8 +45,11 @@ function MyAccount() {
   const [checkingIn, setCheckingIn] = useState<boolean>(false);
 
   // --- 消息提示状态分离 ---
-  const [message, setMessage] = useState<string>(""); // 全局操作反馈（上传、修改资料等）
-  const [checkInMessage, setCheckInMessage] = useState<string>(""); // 仅用于签到的反馈提示
+  const [message, setMessage] = useState<string>(""); // 全局操作反馈（目前仅作品上传/删除等）
+  const [checkInMessage, setCheckInMessage] = useState<string>(""); // 签到反馈
+  const [avatarMessage, setAvatarMessage] = useState<string>(""); // 头像反馈
+  // +++ 新增：个人签名独立消息 +++
+  const [bioMessage, setBioMessage] = useState<string>("");
 
   const fetchProfile = async () => {
     if (!targetUserId) return;
@@ -55,7 +58,9 @@ function MyAccount() {
       setLoading(true);
       setError(null);
       setMessage("");
-      setCheckInMessage(""); // 重置签到消息
+      setCheckInMessage("");
+      setAvatarMessage("");
+      setBioMessage(""); // +++ 重置签名消息 +++
 
       const profileRes = await api.get(`/users/${targetUserId}/profile`);
       if (!profileRes.data.success) {
@@ -104,7 +109,7 @@ function MyAccount() {
     const file = event.target.files?.[0];
     if (!file || !isOwner) return;
 
-    setMessage("");
+    setAvatarMessage("");
     try {
       setUploadingAvatar(true);
       const formData = new FormData();
@@ -127,31 +132,31 @@ function MyAccount() {
 
       setUserInfo((prev) => (prev ? { ...prev, img_path: avatarPath } : prev));
       updateAvatar(avatarPath);
-      setMessage("头像更新成功");
+      setAvatarMessage("头像更新成功");
     } catch (err) {
       console.error("Avatar upload error:", err);
-      setMessage("头像上传失败，请稍后重试");
+      setAvatarMessage("头像上传失败，请稍后重试");
     } finally {
       setUploadingAvatar(false);
       event.target.value = "";
     }
   };
 
-  /** 保存个人签名 */
+  /** 保存个人签名 - 使用独立的 bioMessage */
   const handleSaveBio = async () => {
     if (!isOwner) return;
     try {
       setSavingBio(true);
-      setMessage("");
+      setBioMessage(""); // +++ 使用专属消息状态 +++
       const res = await api.put("/my_info/profile", { bio: bioDraft });
       if (!res.data?.success) {
         throw new Error(res.data?.message || "个人签名保存失败");
       }
       setUserInfo((prev) => (prev ? { ...prev, bio: bioDraft.trim() } : prev));
-      setMessage("个人签名已保存");
+      setBioMessage("个人签名已保存"); // +++ 成功消息 +++
     } catch (err) {
       console.error("Save bio error:", err);
-      setMessage("个人签名保存失败，请稍后重试");
+      setBioMessage("个人签名保存失败，请稍后重试"); // +++ 失败消息 +++
     } finally {
       setSavingBio(false);
     }
@@ -163,7 +168,7 @@ function MyAccount() {
 
     try {
       setCheckingIn(true);
-      setCheckInMessage(""); // 清除之前的签到提示
+      setCheckInMessage("");
       const res = await api.post("/my_info/check-in");
 
       if (!res.data?.success) {
@@ -185,7 +190,6 @@ function MyAccount() {
         today_total_points: totalPoints,
       });
 
-      // 设置签到专属消息
       setCheckInMessage(
         `签到成功，获得 ${totalPoints} 积分${bonusPoints > 0 ? `（含连续签到奖励 ${bonusPoints} 积分）` : ""}`,
       );
@@ -202,7 +206,6 @@ function MyAccount() {
 
       if (alreadyCheckedIn) {
         setCheckInMessage("今天已经签到过了");
-        // 尝试刷新状态同步 UI
         try {
           const [myRes, checkInRes] = await Promise.all([
             api.get("/my_info"),
@@ -306,16 +309,26 @@ function MyAccount() {
         <div className={styles.avatarSection}>
           <img src={avatarSrc} alt="用户头像" className={styles.avatarImage} />
           {isOwner && (
-            <label className={styles.avatarUploadButton}>
-              {uploadingAvatar ? "上传中..." : "修改头像"}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                className={styles.hiddenInput}
-                disabled={uploadingAvatar}
-              />
-            </label>
+            <>
+              <label className={styles.avatarUploadButton}>
+                {uploadingAvatar ? "上传中..." : "修改头像"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className={styles.hiddenInput}
+                  disabled={uploadingAvatar}
+                />
+              </label>
+              {avatarMessage && (
+                <p
+                  className={styles.uploadMessage}
+                  style={{ marginTop: "8px" }}
+                >
+                  {avatarMessage}
+                </p>
+              )}
+            </>
           )}
         </div>
 
@@ -343,12 +356,21 @@ function MyAccount() {
           <strong>账号类型:</strong>{" "}
           {roleDisplayMap[userInfo.role] || userInfo.role}
         </p>
-        <p>
-          <strong>当前积分:</strong>{" "}
-          <span style={{ color: "#27ae60", fontWeight: "bold" }}>
-            {points ?? 0}
-          </span>
-        </p>
+        {isOwner && (
+          <p>
+            <strong>当前积分:</strong>{" "}
+            <span style={{ color: "#27ae60", fontWeight: "bold" }}>
+              {points ?? 0}
+            </span>
+          </p>
+        )}
+        {isOwner && (
+          <p className={styles.pointsAction}>
+            <Link to="/points/history" className={styles.actionButton}>
+              查看积分明细
+            </Link>
+          </p>
+        )}
 
         {/* --- 签到区域：独立消息显示 --- */}
         {isOwner && checkInStatus && (
@@ -379,7 +401,6 @@ function MyAccount() {
                   ? "立即签到"
                   : "今日已签到"}
             </button>
-            {/* 签到专属消息：显示在签到卡片底部 */}
             {checkInMessage && (
               <p
                 className={styles.uploadMessage}
@@ -410,6 +431,15 @@ function MyAccount() {
               >
                 {savingBio ? "保存中..." : "保存签名"}
               </button>
+              {/* +++ 个人签名操作消息，紧贴在按钮下方 +++ */}
+              {bioMessage && (
+                <p
+                  className={styles.uploadMessage}
+                  style={{ marginTop: "8px" }}
+                >
+                  {bioMessage}
+                </p>
+              )}
             </>
           ) : (
             <p className={styles.bioText}>
@@ -458,8 +488,6 @@ function MyAccount() {
                     className={styles.workImage}
                   />
                   <div style={{ padding: "16px" }}>
-                    {" "}
-                    {/* 或者使用 class 控制 */}
                     <p className={styles.workMeta}>
                       {formatDate(work.created_at)}
                     </p>
@@ -484,7 +512,7 @@ function MyAccount() {
           )}
         </div>
 
-        {/* 底部操作反馈消息（现在仅处理头像、签名、作品增删等全局操作） */}
+        {/* 底部全局消息（仅作品上传/删除等操作） */}
         {message && <p className={styles.uploadMessage}>{message}</p>}
       </div>
     </div>

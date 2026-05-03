@@ -7,6 +7,7 @@ import api from "../api/axios";
 import { useAuth } from "../hooks/useAuth";
 
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
@@ -15,6 +16,25 @@ import type { ReactNode, HTMLAttributes } from "react";
 
 const DEFAULT_ERROR_TEXT = "哎呀，出错了。";
 const NEW_CHAT_TEXT = "你好！让我们开始一个新话题吧。";
+
+// 清洗函数
+const sanitizeReply = (raw: string): string => {
+  // 1. 移除所有 <think>...</think>
+  let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/g, "");
+
+  // 2. 消灭表格内部空行（即表格行与下一个表格行之间的空行）
+  //    匹配: 表格行末尾 + 空行 + 下一个表格行开头
+  cleaned = cleaned.replace(/^\|(.+)$\n\n(?=^\|)/gm, "|$1");
+
+  // 3. 确保表格块（表头行 + 分隔行）之前有一个空行，否则添加
+  //    匹配: 一个非空行直接跟表格表头行 + 分隔行
+  cleaned = cleaned.replace(
+    /([^\n])\n(\|[^\n]*\n\|[-: ]{3,}[^\n]*)/g,
+    "$1\n\n$2",
+  );
+
+  return cleaned;
+};
 
 const Live2DViewer: React.FC = () => {
   const [isVisible, setIsVisible] = useState(true);
@@ -31,8 +51,8 @@ const Live2DViewer: React.FC = () => {
   const spriteRef = useRef<Live2DSprite | null>(null);
   const { auth } = useAuth();
   // 添加当前用户标识的存储
-  const [currentUser, setCurrentUser] = useState<string | null>(() => 
-    localStorage.getItem("l2d_current_user")
+  const [currentUser, setCurrentUser] = useState<string | null>(() =>
+    localStorage.getItem("l2d_current_user"),
   );
 
   //l2d初始化
@@ -94,7 +114,7 @@ const Live2DViewer: React.FC = () => {
     const checkUserChange = () => {
       const storedUser = localStorage.getItem("l2d_current_user");
       const newUser = auth.user_id; // 从你的用户系统获取当前用户ID
-      
+
       if (newUser !== storedUser) {
         // 用户已切换，清理旧对话
         localStorage.setItem("l2d_current_user", newUser);
@@ -106,7 +126,7 @@ const Live2DViewer: React.FC = () => {
     };
 
     checkUserChange();
-    
+
     // 监听 storage 事件，处理多标签页切换
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "l2d_current_user" && e.newValue !== currentUser) {
@@ -116,10 +136,10 @@ const Live2DViewer: React.FC = () => {
         setCurrentUser(e.newValue);
       }
     };
-    
+
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, [currentUser,auth]);
+  }, [currentUser, auth]);
 
   const parseErrorResponse = async (response: Response) => {
     let errorMessage = `请求失败，状态码 ${response.status}`;
@@ -216,9 +236,11 @@ const Live2DViewer: React.FC = () => {
               typeof data.answer === "string"
             ) {
               accumulatedText += data.answer;
-              setReplyText(accumulatedText);
+              // 使用清洗后的文本显示，去除 think 标签
+              const displayText = sanitizeReply(accumulatedText);
+              setReplyText(displayText);
 
-              if (accumulatedText.length % 20 === 0) {
+              if (displayText.length % 20 === 0) {
                 spriteRef.current?.startRandomMotion({
                   group: "Motion",
                   priority: 2,
@@ -231,11 +253,12 @@ const Live2DViewer: React.FC = () => {
         }
       }
 
-      if (!accumulatedText.trim()) {
-        throw new Error(
-          "Dify 未返回可见答案。请检查后端 /api/chat 的日志。",
-        );
+      // 流结束，做最终清洗，防止末尾残留未闭合的 <think>
+      const finalDisplay = sanitizeReply(accumulatedText);
+      if (!finalDisplay.trim()) {
+        throw new Error("Dify 未返回可见答案。请检查后端 /api/chat 的日志。");
       }
+      setReplyText(finalDisplay);
     } catch (error) {
       console.log(error);
       setReplyText(error instanceof Error ? error.message : DEFAULT_ERROR_TEXT);
@@ -274,6 +297,14 @@ const Live2DViewer: React.FC = () => {
         </code>
       );
     },
+    // 新增表格相关组件，使表格具备基本样式
+    table: ({ children }) => (
+      <table className={style["markdown-table"]}>{children}</table>
+    ),
+    thead: ({ children }) => <thead>{children}</thead>,
+    tbody: ({ children }) => <tbody>{children}</tbody>,
+    th: ({ children }) => <th className={style["markdown-th"]}>{children}</th>,
+    td: ({ children }) => <td className={style["markdown-td"]}>{children}</td>,
   };
 
   return (
@@ -312,7 +343,7 @@ const Live2DViewer: React.FC = () => {
                 ) : (
                   <div className={style["markdown-content"]}>
                     <ReactMarkdown
-                      remarkPlugins={[remarkMath]}
+                      remarkPlugins={[remarkMath, remarkGfm]}
                       rehypePlugins={[rehypeKatex]}
                       components={markdownComponents}
                     >

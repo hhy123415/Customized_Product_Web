@@ -21,6 +21,8 @@ import CreatePostPage from "./pages/CreatePost";
 import AdminUserQueryPage from "./pages/AdminUserQuery";
 import AdminOrderQueryPage from "./pages/AdminOrderQuery";
 import UserOrderQueryPage from "./pages/UserOrderQuery";
+import RewardShop from "./pages/RewardShop";
+import PointsHistory from "./pages/PointsHistory";
 
 const AppContent = () => {
   const { auth } = useAuth();
@@ -125,6 +127,22 @@ const AppContent = () => {
           element={
             <UserRoute>
               <MyAccount />
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/points/history"
+          element={
+            <UserRoute>
+              <PointsHistory />
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/rewards"
+          element={
+            <UserRoute>
+              <RewardShop />
             </UserRoute>
           }
         />

@@ -41,15 +41,21 @@ export interface AdminUser {
 
 export interface Post {
   post_id: string;
+  user_id?: string; // 后端返回
+  author_user_id?: string; // 后端兼容
+  author_username: string;
+  author_img_path: string | null;
+  author_role?: string;
   title: string;
   content: string;
   reply_count: number;
   created_at: string;
   updated_at: string;
-  author_username: string;
-  author_role: Role;
-  author_img_path?: string | null;
+  access_level?: string; // 访问级别
+  points_required?: number;
+  preview_length?: number;
 }
+
 export interface PostDetail {
   post_id: string;
   title: string;
@@ -61,6 +67,10 @@ export interface PostDetail {
   author_username: string;
   author_role: Role;
   author_img_path?: string | null;
+  access_level?: string;
+  content_locked?: boolean;
+  points_required?: number;
+  preview_length?: number;
 }
 
 export interface Comment {
@@ -93,4 +103,13 @@ export interface AdminOrder {
   status: "submitted" | "processing" | "shipped" | "completed" | "cancelled";
   created_at: string;
   updated_at: string;
+}
+
+export interface PointRecordRow {
+  record_id: number;
+  user_id: number;
+  points_change: number;
+  points_after: number;
+  detail: string;
+  created_at: string;
 }

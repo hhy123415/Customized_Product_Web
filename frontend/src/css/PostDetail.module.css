@@ -100,6 +100,14 @@
   line-height: 1.8;
 }
 
+.postContent img {
+  max-width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+
 .replySection {
   margin-top: 24px;
 }
@@ -193,6 +201,27 @@
   margin: 0;
   color: #dc2626;
   font-weight: 600;
+}
+
+/* ========== 锁定预览区域 ========== */
+.lockedPreview {
+  margin-top: 20px;
+  padding: 30px 20px;
+  text-align: center;
+  background: #f7f9fc;
+  border-radius: 8px;
+  border: 1px dashed #b0b8c4;
+  color: #5c6b7a;
+}
+
+.lockedTitle {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.lockedDesc {
+  font-size: 0.95rem;
+  color: #6f7e91;
 }
 
 @media (max-width: 768px) {

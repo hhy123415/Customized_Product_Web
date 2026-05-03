@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import styles from "../css/PostDetail.module.css";
 import loginStyle from "../css/LoginTip.module.css";
 import { useAuth } from "../hooks/useAuth";
@@ -5,6 +6,10 @@ import { Link, useParams } from "react-router-dom";
 import { useEffect, useState, type FormEvent } from "react";
 import api from "../api/axios";
 import type { Comment, PostDetail } from "../Interface";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
+import MarkdownEditor from "../component/MarkdownEditor";
 
 const DEFAULT_AVATAR = "/default-avatar.png";
 
@@ -14,7 +19,6 @@ const formatDate = (value: string) => {
   return date.toLocaleString("zh-CN", { hour12: false });
 };
 
-// 角色标签映射函数
 const getRoleTag = (role?: string) => {
   switch (role) {
     case "admin":
@@ -25,7 +29,6 @@ const getRoleTag = (role?: string) => {
 };
 
 function PostDetailPage() {
-  /*auth.role=="admin"为管理员,auth.role=="enterprise"为企业用户，其他为普通用户*/
   const { auth } = useAuth();
   const { postId } = useParams();
   const [post, setPost] = useState<PostDetail | null>(null);
@@ -97,6 +100,17 @@ function PostDetailPage() {
     }
   };
 
+  // 锁定提示区域（使用 CSS 模块类）
+  const LockedOverlay = () => (
+    <div className={styles.lockedPreview}>
+      <p className={styles.lockedTitle}>🔒 此帖子设置了访问限制</p>
+      <p className={styles.lockedDesc}>
+        仅帖主和管理员可以查看完整内容与回复。
+        {post?.access_level === "points" && "（未来支持积分解锁）"}
+      </p>
+    </div>
+  );
+
   return (
     <div className={loginStyle.container}>
       {!auth.isLoggedIn && (
@@ -153,83 +167,108 @@ function PostDetailPage() {
                   </div>
                 </div>
 
-                <p className={styles.postContent}>{post.content}</p>
-              </article>
-
-              <section className={styles.replySection}>
-                <h2>回复 ({comments.length})</h2>
-
-                <div className={styles.floorList}>
-                  {comments.length === 0 ? (
-                    <p className={styles.emptyText}>还没有回复，来抢沙发吧。</p>
-                  ) : (
-                    comments.map((comment, index) => (
-                      <article
-                        key={comment.comment_id}
-                        className={styles.floorCard}
-                      >
-                        <div className={styles.floorHeader}>
-                          <div className={styles.authorRow}>
-                            <Link
-                              to={`/users/${comment.author_user_id}`}
-                              className={styles.userLink}
-                            >
-                              <img
-                                src={comment.author_img_path || DEFAULT_AVATAR}
-                                alt={`${comment.author_username} 的头像`}
-                                className={styles.avatar}
-                              />
-                            </Link>
-                            <div>
-                              <Link
-                                to={`/users/${comment.author_user_id}`}
-                                className={`${styles.authorName} ${styles.userLink}`}
-                              >
-                                {comment.author_username}
-                                <span
-                                  className={`${styles.roleTag} ${getRoleTag(comment.author_role).className}`}
-                                >
-                                  {getRoleTag(comment.author_role).text}
-                                </span>
-                              </Link>
-                              <p className={styles.meta}>
-                                {formatDate(comment.created_at)}
-                              </p>
-                            </div>
-                          </div>
-                          <span className={styles.floorTag}>
-                            {index + 1} 楼
-                          </span>
-                        </div>
-                        <p className={styles.floorContent}>{comment.content}</p>
-                      </article>
-                    ))
-                  )}
+                {/* 帖子内容区域 */}
+                <div className={styles.postContent}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeSanitize]}
+                    components={{
+                      img: ({ node, ...props }) => (
+                        <img {...props} loading="lazy" />
+                      ),
+                    }}
+                  >
+                    {post.content}
+                  </ReactMarkdown>
                 </div>
 
-                <form
-                  className={styles.replyForm}
-                  onSubmit={handleCreateComment}
-                >
-                  <textarea
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    rows={5}
-                    placeholder="写下你的回复..."
-                    className={styles.textarea}
-                  />
-                  {submitError && (
-                    <p className={styles.errorMessage}>{submitError}</p>
-                  )}
-                  <button
-                    type="submit"
-                    className={styles.primaryBtn}
-                    disabled={isSubmitting}
+                {/* 若被锁定，在内容下方显示遮罩提示 */}
+                {post.content_locked && <LockedOverlay />}
+              </article>
+
+              {/* 只有未锁定才显示回复模块 */}
+              {!post.content_locked && (
+                <section className={styles.replySection}>
+                  <h2>回复 ({comments.length})</h2>
+
+                  <div className={styles.floorList}>
+                    {comments.length === 0 ? (
+                      <p className={styles.emptyText}>还没有回复，来抢沙发吧。</p>
+                    ) : (
+                      comments.map((comment, index) => (
+                        <article
+                          key={comment.comment_id}
+                          className={styles.floorCard}
+                        >
+                          <div className={styles.floorHeader}>
+                            <div className={styles.authorRow}>
+                              <Link
+                                to={`/users/${comment.author_user_id}`}
+                                className={styles.userLink}
+                              >
+                                <img
+                                  src={comment.author_img_path || DEFAULT_AVATAR}
+                                  alt={`${comment.author_username} 的头像`}
+                                  className={styles.avatar}
+                                />
+                              </Link>
+                              <div>
+                                <Link
+                                  to={`/users/${comment.author_user_id}`}
+                                  className={`${styles.authorName} ${styles.userLink}`}
+                                >
+                                  {comment.author_username}
+                                  <span
+                                    className={`${styles.roleTag} ${getRoleTag(comment.author_role).className}`}
+                                  >
+                                    {getRoleTag(comment.author_role).text}
+                                  </span>
+                                </Link>
+                                <p className={styles.meta}>
+                                  {formatDate(comment.created_at)}
+                                </p>
+                              </div>
+                            </div>
+                            <span className={styles.floorTag}>
+                              {index + 1} 楼
+                            </span>
+                          </div>
+                          <div className={styles.floorContent}>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              rehypePlugins={[rehypeSanitize]}
+                            >
+                              {comment.content}
+                            </ReactMarkdown>
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </div>
+
+                  <form
+                    className={styles.replyForm}
+                    onSubmit={handleCreateComment}
                   >
-                    {isSubmitting ? "提交中..." : "提交回复"}
-                  </button>
-                </form>
-              </section>
+                    <MarkdownEditor
+                      value={newComment}
+                      onChange={setNewComment}
+                      height={300}
+                      placeholder="写下你的回复..."
+                    />
+                    {submitError && (
+                      <p className={styles.errorMessage}>{submitError}</p>
+                    )}
+                    <button
+                      type="submit"
+                      className={styles.primaryBtn}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "提交中..." : "提交回复"}
+                    </button>
+                  </form>
+                </section>
+              )}
             </>
           )}
         </div>

@@ -1,7 +1,7 @@
 /* CreativeSquare.css - 统一设计系统 */
 
 /* 导入设计系统变量 */
-@import './variables.css';
+@import "./variables.css";
 
 .dashboardCard {
   width: min(1200px, 94%);
@@ -44,7 +44,9 @@
   color: var(--color-white);
   background: var(--gradient-primary);
   font-weight: var(--font-semibold);
-  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+  transition:
+    transform var(--transition-normal),
+    box-shadow var(--transition-normal);
 }
 
 .publishEntry:hover {
@@ -143,13 +145,18 @@
 }
 
 .primaryBtn::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
   transition: left 0.5s;
 }
 
@@ -205,7 +212,7 @@
 }
 
 .postCard::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -214,16 +221,6 @@
   background: var(--gradient-primary);
   opacity: 0;
   transition: opacity var(--transition-normal);
-}
-
-.postCard:hover {
-  transform: translateY(-6px);
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-2xl);
-}
-
-.postCard:hover::before {
-  opacity: 1;
 }
 
 .postTitle {
@@ -315,17 +312,17 @@
   transition: all var(--transition-normal);
 }
 
-.postCard:hover .readMore {
+.readMore {
   color: var(--color-primary-dark);
   transform: translateX(4px);
 }
 
 .readMore::after {
-  content: '→';
+  content: "→";
   transition: transform var(--transition-normal);
 }
 
-.postCard:hover .readMore::after {
+.readMore::after {
   transform: translateX(4px);
 }
 
@@ -401,6 +398,11 @@
   .postContentPreview {
     font-size: var(--text-xs);
   }
+
+  .postCover {
+    width: 95%; /* 稍宽一点，但依然不撑满 */
+    border-radius: 6px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -451,6 +453,12 @@
     width: 28px;
     height: 28px;
   }
+
+  .postCover {
+    width: 100%; /* 小屏全宽更易阅读 */
+    aspect-ratio: 4 / 3; /* 比例更高，显示更多纵向内容 */
+    border-radius: 6px;
+  }
 }
 
 /* 动画 */
@@ -463,4 +471,84 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.postCover {
+  display: block;
+  width: 60%; /* 不再强制撑满，留出呼吸空间 */
+  max-width: 100%; /* 防止内容溢出 */
+  aspect-ratio: 16 / 9; /* 高度由宽度自动计算，比例协调 */
+  object-fit: cover; /* 保持填充模式 */
+  object-position: center; /* 焦点居中 */
+  border-radius: 8px;
+  margin: 0 auto 12px; /* 居中 + 下间距 */
+  background-color: #f3f4f6; /* 加载占位 */
+  transition: transform 0.3s ease;
+}
+
+.postCard:hover .postCover {
+  transform: scale(1.03);
+}
+
+/* ========== 访问控制选项样式 ========== */
+.accessControlGroup {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.accessControlTitle {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  color: #334155;
+  cursor: pointer;
+}
+
+.radioLabel input[type="radio"] {
+  margin: 0;
+}
+
+.optionField {
+  margin-top: 12px;
+}
+
+.fieldLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.smallInput {
+  width: 100px;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.fieldHint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #64748b;
 }

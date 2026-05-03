@@ -7,5 +7,8 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "remark-gfm": "^4.0.1"
   }
 }

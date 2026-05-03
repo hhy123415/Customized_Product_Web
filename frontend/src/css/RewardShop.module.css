@@ -1,0 +1,370 @@
+/* RewardShop.module.css */
+
+/* 引入项目统一设计变量 */
+@import "./variables.css";
+
+/* ---------- 页面容器 ---------- */
+.reward-shop {
+  min-height: calc(100vh - 64px);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-4) var(--space-12);
+  font-family: var(--font-family);
+  animation: fadeIn 0.6s ease-out;
+}
+
+.reward-shop h1 {
+  text-align: center;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--space-2);
+}
+
+.points {
+  text-align: center;
+  font-size: var(--text-lg);
+  color: var(--color-gray-700);
+  font-weight: var(--font-semibold);
+  background: var(--color-gray-50);
+  display: inline-block;
+  padding: var(--space-2) var(--space-6);
+  border-radius: 9999px;
+  margin: 0 auto var(--space-8);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-gray-200);
+}
+
+/* ---------- 奖品卡片网格 ---------- */
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.reward-card {
+  background: var(--color-white);
+  border: 2px solid var(--color-gray-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  transition: all var(--transition-normal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.reward-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gradient-primary);
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  z-index: 2;
+}
+
+.reward-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-2xl);
+}
+
+.reward-card:hover::before {
+  opacity: 1;
+}
+
+/* 图片容器 */
+.image-wrapper {
+  width: 100%;
+  height: 200px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background-color: #f5f5f5;
+  margin-bottom: var(--space-4);
+  flex-shrink: 0;
+}
+
+.image-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform var(--transition-normal);
+}
+
+.reward-card:hover .image-wrapper img {
+  transform: scale(1.05);
+}
+
+.reward-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-gray-900);
+}
+
+.desc {
+  color: var(--color-gray-600);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  margin: 0 0 var(--space-3);
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cost {
+  background: linear-gradient(135deg, #fef3c7 0%, #ffeaa7 100%);
+  color: #b45309;
+  font-weight: var(--font-bold);
+  padding: var(--space-1) var(--space-4);
+  border-radius: 9999px;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+  border: 1px solid #fcd34d;
+}
+
+.reward-card button {
+  width: 100%;
+  padding: var(--space-3) var(--space-6);
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  margin-top: auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.reward-card button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-primary);
+}
+
+.reward-card button:disabled {
+  background: var(--color-gray-300);
+  color: var(--color-gray-500);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ---------- 模态框 ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal {
+  background: var(--color-white);
+  border-radius: var(--radius-2xl);
+  padding: var(--space-8);
+  max-width: 480px;
+  width: 100%;
+  box-shadow: var(--shadow-2xl);
+  animation: slideUp 0.3s ease-out;
+  position: relative;
+}
+
+.modal h2 {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--color-gray-900);
+  margin: 0 0 var(--space-2);
+}
+
+.modal p {
+  color: var(--color-gray-600);
+  margin-bottom: var(--space-6);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.modal form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.modal label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-gray-700);
+  gap: var(--space-1);
+}
+
+.modal input,
+.modal textarea {
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--color-gray-200);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+  resize: vertical;
+}
+
+.modal input:focus,
+.modal textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.modal textarea {
+  min-height: 80px;
+}
+
+.error-msg {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  text-align: center;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.success-msg {
+  background-color: rgba(34, 197, 94, 0.1);
+  color: var(--color-success, #16a34a);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  text-align: center;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.modal-btns {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+
+.modal-btns button {
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.modal-btns button[type="submit"] {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+.modal-btns button[type="submit"]:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-primary);
+}
+
+.modal-btns button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-btns button[type="button"] {
+  background: var(--color-gray-100);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-200);
+}
+
+.modal-btns button[type="button"]:hover {
+  background: var(--color-gray-200);
+  transform: translateY(-1px);
+}
+
+/* ---------- 动画 ---------- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 768px) {
+  .reward-shop {
+    padding: var(--space-6) var(--space-3);
+  }
+
+  .reward-shop h1 {
+    font-size: var(--text-2xl);
+  }
+
+  .reward-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+
+  .image-wrapper {
+    height: 160px;
+  }
+}
+
+@media (max-width: 480px) {
+  .reward-shop {
+    padding: var(--space-4) var(--space-2);
+  }
+
+  .reward-shop h1 {
+    font-size: var(--text-xl);
+  }
+
+  .reward-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .image-wrapper {
+    height: 180px;
+  }
+
+  .modal {
+    padding: var(--space-6) var(--space-4);
+    margin: var(--space-4);
+  }
+}

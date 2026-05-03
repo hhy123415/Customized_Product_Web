@@ -34,6 +34,15 @@ export interface AdminUserRow {
   updated_at: string;
 }
 
+export interface PointRecordRow {
+  record_id: number;
+  user_id: number;
+  points_change: number;
+  points_after: number;
+  detail: string;
+  created_at: string;
+}
+
 // ==================== 签到 ====================
 export interface UserCheckInStatusRow {
   last_check_in_date: string | null;
@@ -67,6 +76,7 @@ export interface PostRow {
   title: string;
   content: string;
   reply_count: number;
+  access_level: string;
   created_at: string;
   updated_at: string;
   author_username: string;
@@ -79,6 +89,8 @@ export interface PostDetailRow {
   title: string;
   content: string;
   reply_count: number;
+  access_level: string;
+  preview_length: number;
   created_at: string;
   updated_at: string;
   author_user_id: string;

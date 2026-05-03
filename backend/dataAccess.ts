@@ -14,6 +14,7 @@ import type {
   AdminOrderRow,
   UserCheckInRow,
   UserCheckInStatusRow,
+  PointRecordRow,
 } from "./Interface";
 
 /** 数据库连接池配置 */
@@ -204,15 +205,25 @@ export const db = {
     userId: string;
     title: string;
     content: string;
+    accessLevel: string;
+    pointsRequired: number;
+    previewLength: number;
   }): Promise<PostRow> {
-    const { userId, title, content } = params;
+    const {
+      userId,
+      title,
+      content,
+      accessLevel,
+      pointsRequired,
+      previewLength,
+    } = params;
     const result = await pool.query<PostRow>(
       `
-        INSERT INTO posts (user_id, title, content)
-        VALUES ($1, $2, $3)
-        RETURNING post_id, title, content, reply_count, created_at, updated_at
+        INSERT INTO posts (user_id, title, content,access_level, points_required, preview_length)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING post_id, title, content, reply_count,access_level, created_at, updated_at
       `,
-      [userId, title, content],
+      [userId, title, content, accessLevel, pointsRequired, previewLength],
     );
 
     const inserted = result.rows[0];
@@ -223,6 +234,7 @@ export const db = {
           p.title,
           p.content,
           p.reply_count,
+          p.access_level,
           p.created_at,
           p.updated_at,
           u.username AS author_username,
@@ -556,13 +568,28 @@ export const db = {
     const result = await pool.query<AdminOrderRow>(sql, params);
     return result.rows;
   },
+  /**获取积分记录(限50条) */
+  async getPointRecordsByUserId(
+    userId: string,
+    limit: number = 50,
+  ): Promise<PointRecordRow[]> {
+    const result = await pool.query<PointRecordRow>(
+      `SELECT record_id, points_change, points_after, detail, created_at
+     FROM point_records
+     WHERE user_id = $1
+     ORDER BY created_at DESC, record_id DESC
+     LIMIT $2`,
+      [userId, limit],
+    );
+    return result.rows;
+  },
 
   /** 获取单个帖子的详细信息及作者资料 */
   async getPostDetailById(postId: string): Promise<PostDetailRow | null> {
     const result = await pool.query<PostDetailRow>(
       `
         SELECT
-          p.post_id, p.title, p.content, p.reply_count, p.created_at, p.updated_at,
+          p.post_id, p.title, p.content, p.reply_count, p.access_level, p.preview_length, p.created_at, p.updated_at,
           u.user_id AS author_user_id, u.username AS author_username,
           u.role AS author_role, u.img_path AS author_img_path
         FROM posts p
@@ -578,7 +605,7 @@ export const db = {
   async getPostsWithAuthor(): Promise<PostRow[]> {
     const result = await pool.query<PostRow>(`
       SELECT
-        p.post_id, p.title, p.content, p.reply_count, p.created_at, p.updated_at,
+        p.post_id, p.title, p.content, p.reply_count,p.access_level,  p.created_at, p.updated_at,
         u.username AS author_username, u.role AS author_role, u.img_path AS author_img_path
       FROM posts p
       JOIN users u ON p.user_id = u.user_id
@@ -734,6 +761,91 @@ export const db = {
       "UPDATE email_verification_codes SET used = TRUE WHERE id = $1",
       [id],
     );
+  },
+
+  /** 兑换奖品（事务处理） */
+  async redeemReward(params: {
+    userId: string;
+    rewardId: string;
+    rewardName: string;
+    pointsRequired: number;
+    contactName: string;
+    contactPhone: string;
+    shippingAddress: string;
+    note: string | null;
+  }): Promise<{
+    redemption_id: number;
+    points_after: number;
+    redeemed_at: string;
+  }> {
+    const {
+      userId,
+      rewardId,
+      rewardName,
+      pointsRequired,
+      contactName,
+      contactPhone,
+      shippingAddress,
+      note,
+    } = params;
+
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      // 1. 锁定用户积分行并获取当前积分
+      const userRes = await client.query<{ points: number }>(
+        `SELECT points FROM users WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      );
+      const currentPoints = Number(userRes.rows[0]?.points ?? 0);
+      if (currentPoints < pointsRequired) {
+        throw new Error("积分不足");
+      }
+
+      // 2. 扣除积分（通过 point_records 触发同步）
+      const pointsAfter = currentPoints - pointsRequired;
+      await client.query(
+        `INSERT INTO point_records (user_id, points_change, points_after, detail)
+       VALUES ($1, $2, $3, $4)`,
+        [userId, -pointsRequired, pointsAfter, `兑换奖品：${rewardName}`],
+      );
+
+      // 3. 创建兑换记录
+      const result = await client.query<{
+        redemption_id: number;
+        redeemed_at: string;
+      }>(
+        `INSERT INTO redemptions
+         (user_id, reward_id, reward_name, points_deducted, contact_name, contact_phone, shipping_address, note)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING redemption_id, redeemed_at`,
+        [
+          userId,
+          rewardId,
+          rewardName,
+          pointsRequired,
+          contactName,
+          contactPhone,
+          shippingAddress,
+          note || null,
+        ],
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        redemption_id: result.rows[0].redemption_id,
+        points_after: pointsAfter,
+        redeemed_at: result.rows[0].redeemed_at,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   /** 更新订单状态（管理员操作） */

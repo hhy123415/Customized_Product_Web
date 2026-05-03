@@ -53,12 +53,19 @@ function NavBar() {
               产品定制
             </Link>
           </li>
+
+          <li>
+            <Link
+              to="/rewards"
+              className={location.pathname === "/rewards" ? styles.active : ""}
+            >
+              积分兑换
+            </Link>
+          </li>
           <li>
             <Link
               to="/about"
-              className={
-                location.pathname === "/about" ? styles.active : ""
-              }
+              className={location.pathname === "/about" ? styles.active : ""}
             >
               关于
             </Link>
