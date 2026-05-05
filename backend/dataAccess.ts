@@ -27,6 +27,63 @@ const pool = new Pool({
 });
 
 export const db = {
+  /** 管理员手动调整用户积分（通过 point_records 表记录） */
+  async adminAdjustUserPoints(
+    userId: string,
+    pointsChange: number,
+    detail: string,
+  ): Promise<{ user: AdminUserRow; record: PointRecordRow }> {
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      // 1. 锁定用户行并获取当前积分
+      const userResult = await client.query<{ points: number }>(
+        "SELECT points FROM users WHERE user_id = $1 FOR UPDATE",
+        [userId],
+      );
+
+      if (!userResult.rows[0]) {
+        throw new Error("用户不存在");
+      }
+
+      const currentPoints = Number(userResult.rows[0].points);
+      const pointsAfter = currentPoints + pointsChange;
+
+      if (pointsAfter < 0) {
+        throw new Error("积分不足，操作后积分不能为负");
+      }
+
+      // 2. 插入积分变更记录（触发器会自动同步 users 表）
+      const recordResult = await client.query<PointRecordRow>(
+        `INSERT INTO point_records (user_id, points_change, points_after, detail)
+       VALUES ($1, $2, $3, $4)
+       RETURNING record_id, user_id, points_change, points_after, detail, created_at`,
+        [userId, pointsChange, pointsAfter, detail],
+      );
+
+      // 3. 获取更新后的用户信息
+      const updatedUser = await client.query<AdminUserRow>(
+        `SELECT user_id, username, email, role, points, is_certified_designer, 
+                img_path, bio, created_at, updated_at
+       FROM users WHERE user_id = $1`,
+        [userId],
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        user: updatedUser.rows[0],
+        record: recordResult.rows[0],
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
   /** 用户取消订单（仅限已提交或处理中的订单） */
   async cancelOrderForUser(
     orderId: string,
@@ -481,6 +538,32 @@ export const db = {
     return result.rows[0] ?? null;
   },
 
+  async estimateOrder(
+    orderId: string,
+    totalPrice: number,
+    pricingLines: PoolCueOrderPriceLine[],
+    estimateNote: string | null,
+  ): Promise<AdminOrderRow | null> {
+    const result = await pool.query<AdminOrderRow>(
+      `
+      UPDATE orders
+      SET
+        total_price = $1,
+        pricing_lines = $2::jsonb,
+        estimate_note = $3,
+        estimated_at = NOW(),
+        status = 'quoted',
+        updated_at = NOW()
+      WHERE order_id = $4
+        AND customization_mode = 'freeform'
+        AND status = 'submitted'
+      RETURNING *
+    `,
+      [totalPrice, JSON.stringify(pricingLines), estimateNote, orderId],
+    );
+    return result.rows[0] ?? null;
+  },
+
   /** 获取帖子下的所有评论 */
   async getCommentsByPostId(postId: string): Promise<CommentRow[]> {
     const result = await pool.query<CommentRow>(
@@ -523,7 +606,7 @@ export const db = {
         o.order_id, o.user_id, u.username, o.product_name, o.customization_mode,
         o.configuration, o.pricing_lines, o.total_price, o.contact_name,
         o.contact_phone, o.shipping_address, o.order_note, o.design_image_path,
-        o.design_description, o.status, o.created_at, o.updated_at
+        o.design_description, o.estimate_note, o.estimated_at,o.status, o.created_at, o.updated_at
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.user_id
       ${!normalizedKeyword ? "" : "WHERE o.order_id::TEXT ILIKE $1 OR u.username ILIKE $1 OR o.contact_name ILIKE $1 OR o.contact_phone ILIKE $1 OR o.status::TEXT ILIKE $1"}
@@ -553,7 +636,7 @@ export const db = {
         o.order_id, o.user_id, u.username, o.product_name, o.customization_mode,
         o.configuration, o.pricing_lines, o.total_price, o.contact_name,
         o.contact_phone, o.shipping_address, o.order_note, o.design_image_path,
-        o.design_description, o.status, o.created_at, o.updated_at
+        o.design_description, o.estimate_note, o.estimated_at, o.status, o.created_at, o.updated_at
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.user_id
       WHERE o.user_id = $1
@@ -589,7 +672,7 @@ export const db = {
     const result = await pool.query<PostDetailRow>(
       `
         SELECT
-          p.post_id, p.title, p.content, p.reply_count, p.access_level, p.preview_length, p.created_at, p.updated_at,
+          p.post_id, p.title, p.content, p.reply_count, p.access_level, p.preview_length,p.points_required, p.created_at, p.updated_at,
           u.user_id AS author_user_id, u.username AS author_username,
           u.role AS author_role, u.img_path AS author_img_path
         FROM posts p
@@ -701,7 +784,7 @@ export const db = {
     return result.rows[0] ?? null;
   },
 
-  /** 管理员后台搜索用户（支持 ID、用户名、邮箱、角色模糊搜索） */
+  /** 管理员后台搜索用户（支持 ID、用户名、邮箱模糊搜索） */
   async getUsersForAdmin(
     keyword: string,
     limit: number = 100,
@@ -713,14 +796,27 @@ export const db = {
       : 100;
 
     const sql = `
-      SELECT user_id, username, email, role, img_path, bio, created_at, updated_at
+      SELECT user_id, username, email, role, img_path, bio, points, is_certified_designer, created_at, updated_at
       FROM users
-      ${!normalizedKeyword ? "" : "WHERE CAST(user_id AS TEXT) ILIKE $1 OR username ILIKE $1 OR email ILIKE $1 OR role::TEXT ILIKE $1"}
+      ${!normalizedKeyword ? "" : "WHERE CAST(user_id AS TEXT) ILIKE $1 OR username ILIKE $1 OR email ILIKE $1 "}
       ORDER BY created_at DESC, user_id DESC
       LIMIT ${!normalizedKeyword ? "$1" : "$2"}
     `;
     const params = !normalizedKeyword ? [safeLimit] : [wildcard, safeLimit];
     const result = await pool.query<AdminUserRow>(sql, params);
+    return result.rows;
+  },
+
+  async getUserRedemptions(userId: string, limit: number = 50): Promise<any[]> {
+    const result = await pool.query(
+      `SELECT redemption_id, reward_name, points_deducted, 
+            contact_name, contact_phone, shipping_address, note, redeemed_at
+     FROM redemptions
+     WHERE user_id = $1
+     ORDER BY redeemed_at DESC, redemption_id DESC
+     LIMIT $2`,
+      [userId, limit],
+    );
     return result.rows;
   },
 
@@ -753,6 +849,18 @@ export const db = {
       [email, code],
     );
     return result.rows[0] ?? null;
+  },
+
+  // 检查用户是否已解锁某帖子
+  async hasUserUnlockedPost(userId: string, postId: string): Promise<boolean> {
+    const result = await pool.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+       SELECT 1 FROM user_post_unlocks
+       WHERE user_id = $1 AND post_id = $2
+     ) AS "exists"`,
+      [userId, postId],
+    );
+    return result.rows[0]?.exists ?? false;
   },
 
   /** 将邮箱验证码标记为已使用 */
@@ -848,6 +956,83 @@ export const db = {
     }
   },
 
+  // 解锁帖子（事务：扣积分 → 帖主分成 → 记录）
+  async unlockPost(
+    unlockerId: string,
+    postId: string,
+    pointsRequired: number,
+    postAuthorId: string,
+  ): Promise<{ points_spent: number; unlockerPointsAfter: number }> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. 检查重复解锁
+      const already = await client.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+         SELECT 1 FROM user_post_unlocks
+         WHERE user_id = $1 AND post_id = $2
+       ) AS "exists"`,
+        [unlockerId, postId],
+      );
+      if (already.rows[0]?.exists) {
+        throw new Error("您已解锁过该帖子");
+      }
+
+      // 2. 锁定解锁者积分行
+      const unlockerRes = await client.query<{ points: number }>(
+        `SELECT points FROM users WHERE user_id = $1 FOR UPDATE`,
+        [unlockerId],
+      );
+      const unlockerPoints = Number(unlockerRes.rows[0]?.points ?? 0);
+      if (unlockerPoints < pointsRequired) {
+        throw new Error("积分不足");
+      }
+
+      // 3. 扣除解锁者积分（通过 point_records 触发器同步 users.points）
+      const unlockerPointsAfter = unlockerPoints - pointsRequired;
+      await client.query(
+        `INSERT INTO point_records (user_id, points_change, points_after, detail)
+       VALUES ($1, $2, $3, $4)`,
+        [unlockerId, -pointsRequired, unlockerPointsAfter, "解锁帖子"],
+      );
+
+      // 4. 帖主获得一半积分（四舍五入）
+      const authorShare = Math.round(pointsRequired / 2);
+      if (authorShare > 0) {
+        const authorRes = await client.query<{ points: number }>(
+          `SELECT points FROM users WHERE user_id = $1 FOR UPDATE`,
+          [postAuthorId],
+        );
+        const authorPoints = Number(authorRes.rows[0]?.points ?? 0);
+        const authorPointsAfter = authorPoints + authorShare;
+        await client.query(
+          `INSERT INTO point_records (user_id, points_change, points_after, detail)
+         VALUES ($1, $2, $3, $4)`,
+          [postAuthorId, authorShare, authorPointsAfter, "帖子被解锁收益"],
+        );
+      }
+
+      // 5. 写入解锁记录
+      await client.query(
+        `INSERT INTO user_post_unlocks (user_id, post_id, points_spent)
+       VALUES ($1, $2, $3)`,
+        [unlockerId, postId, pointsRequired],
+      );
+
+      await client.query("COMMIT");
+      return {
+        points_spent: pointsRequired,
+        unlockerPointsAfter,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   /** 更新订单状态（管理员操作） */
   async updateOrderStatus(
     orderId: string,
@@ -878,6 +1063,22 @@ export const db = {
     const result = await pool.query<UserRow>(
       "UPDATE users SET bio = $1 WHERE user_id = $2 RETURNING *",
       [bio, userId],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  /** 更新用户设计师认证状态 */
+  async updateUserCertification(
+    userId: string,
+    isCertified: boolean,
+  ): Promise<AdminUserRow | null> {
+    const result = await pool.query<AdminUserRow>(
+      `UPDATE users 
+       SET is_certified_designer = $1, updated_at = NOW()
+       WHERE user_id = $2
+       RETURNING user_id, username, email, role, points, is_certified_designer, 
+                 img_path, bio, created_at, updated_at`,
+      [isCertified, userId],
     );
     return result.rows[0] ?? null;
   },

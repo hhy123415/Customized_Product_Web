@@ -17,6 +17,11 @@ function AdminOrderQueryPage() {
   const [activeKeyword, setActiveKeyword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [estimatingId, setEstimatingId] = useState<string | null>(null);
+  const [estimateForm, setEstimateForm] = useState({
+    total_price: "",
+    estimate_note: "",
+  });
 
   const fetchOrders = async (keyword: string) => {
     setIsLoading(true);
@@ -69,13 +74,38 @@ function AdminOrderQueryPage() {
       if (response.data.success) {
         setOrders((currentOrders) =>
           currentOrders.map((order) =>
-            order.order_id === orderId ? { ...order, status: newStatus } : order,
+            order.order_id === orderId
+              ? { ...order, status: newStatus }
+              : order,
           ),
         );
       }
     } catch (err) {
       console.error("Failed to update status:", err);
       alert("状态更新失败");
+    }
+  };
+
+  const handleEstimateSubmit = async (orderId: string) => {
+    const totalPrice = parseFloat(estimateForm.total_price);
+    if (!totalPrice || totalPrice <= 0) {
+      alert("请输入有效的价格");
+      return;
+    }
+    try {
+      const response = await api.patch(`/admin/orders/${orderId}/estimate`, {
+        total_price: totalPrice,
+        pricing_lines: [],
+        estimate_note: estimateForm.estimate_note,
+      });
+      if (response.data.success) {
+        fetchOrders(activeKeyword); // 刷新列表
+        setEstimatingId(null);
+        setEstimateForm({ total_price: "", estimate_note: "" });
+      }
+    } catch (err) {
+      console.error("估价失败", err);
+      alert("估价失败，请稍后再试");
     }
   };
 
@@ -118,8 +148,8 @@ function AdminOrderQueryPage() {
         {!isLoading && !error && (
           <>
             <p className={styles.resultMeta}>
-              {activeKeyword ? `关键词 ${activeKeyword} | ` : ""}
-              共 {orders.length} 条结果
+              {activeKeyword ? `关键词 ${activeKeyword} | ` : ""}共{" "}
+              {orders.length} 条结果
             </p>
             <div className={styles.list}>
               {orders.length === 0 ? (
@@ -136,31 +166,18 @@ function AdminOrderQueryPage() {
                     }}
                   >
                     <div style={{ width: "160px", flexShrink: 0 }}>
-                      {order.customization_mode === "preset" ? (
-                        <img
-                          src="/preset_example.jpg"
-                          alt="参数定制球杆"
-                          style={{
-                            width: "100%",
-                            height: "auto",
-                            borderRadius: "8px",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        <img
-                          src={
-                            order.design_image_path || "/images/placeholder.jpg"
-                          }
-                          alt="自由定制设计图"
-                          style={{
-                            width: "100%",
-                            height: "auto",
-                            borderRadius: "8px",
-                            objectFit: "cover",
-                          }}
-                        />
-                      )}
+                      <img
+                        src={
+                          order.design_image_path || "/images/placeholder.jpg"
+                        }
+                        alt="自由定制设计图"
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          borderRadius: "8px",
+                          objectFit: "cover",
+                        }}
+                      />
                     </div>
 
                     <div className={styles.itemMain} style={{ flex: 1 }}>
@@ -192,6 +209,29 @@ function AdminOrderQueryPage() {
                             ￥{order.total_price.toFixed(2)}
                           </p>
                         )}
+
+                        {order.customization_mode === "freeform" &&
+                          order.total_price > 0 && (
+                            <div
+                              style={{
+                                background: "#f0f7ff",
+                                padding: "10px",
+                                borderRadius: "6px",
+                                marginTop: "8px",
+                              }}
+                            >
+                              <p className={styles.meta}>
+                                <strong>报价:</strong> ￥
+                                {order.total_price.toFixed(2)}
+                              </p>
+                              {order.estimate_note && (
+                                <p className={styles.meta}>
+                                  <strong>估价备注:</strong>{" "}
+                                  {order.estimate_note}
+                                </p>
+                              )}
+                            </div>
+                          )}
                       </div>
 
                       <p className={styles.meta}>
@@ -243,7 +283,8 @@ function AdminOrderQueryPage() {
                         </p>
                       )}
                       <p className={styles.meta}>
-                        <strong>创建时间:</strong> {formatDate(order.created_at)}
+                        <strong>创建时间:</strong>{" "}
+                        {formatDate(order.created_at)}
                       </p>
 
                       <div className={styles.statusActions}>
@@ -287,6 +328,106 @@ function AdminOrderQueryPage() {
                           >
                             取消订单
                           </button>
+                        )}
+                        {order.status === "submitted" &&
+                          order.customization_mode === "freeform" && (
+                            <button
+                              className={styles.actionBtn}
+                              onClick={() => {
+                                setEstimatingId(order.order_id);
+                                setEstimateForm({
+                                  total_price: "",
+                                  estimate_note: "",
+                                });
+                              }}
+                            >
+                              评估定价
+                            </button>
+                          )}
+                          
+                        {order.status === "quoted" && (
+                          <>
+                            <button
+                              className={styles.actionBtn}
+                              onClick={() => {
+                                setEstimatingId(order.order_id);
+                                setEstimateForm({
+                                  total_price: order.total_price
+                                    ? String(order.total_price)
+                                    : "",
+                                  estimate_note: order.estimate_note || "",
+                                });
+                              }}
+                            >
+                              重新估价
+                            </button>
+                            <button
+                              className={`${styles.actionBtn} ${styles.danger}`}
+                              onClick={() =>
+                                handleStatusUpdate(order.order_id, "cancelled")
+                              }
+                            >
+                              取消订单
+                            </button>
+                          </>
+                        )}
+
+                        {estimatingId === order.order_id && (
+                          <div
+                            style={{
+                              marginTop: "10px",
+                              padding: "10px",
+                              background: "#f9f9f9",
+                              borderRadius: "6px",
+                            }}
+                          >
+                            <input
+                              type="number"
+                              placeholder="总价（元）"
+                              value={estimateForm.total_price}
+                              onChange={(e) =>
+                                setEstimateForm((prev) => ({
+                                  ...prev,
+                                  total_price: e.target.value,
+                                }))
+                              }
+                              style={{
+                                padding: "6px 8px",
+                                marginRight: "8px",
+                                width: "120px",
+                              }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="备注（选填）"
+                              value={estimateForm.estimate_note}
+                              onChange={(e) =>
+                                setEstimateForm((prev) => ({
+                                  ...prev,
+                                  estimate_note: e.target.value,
+                                }))
+                              }
+                              style={{
+                                padding: "6px 8px",
+                                marginRight: "8px",
+                                width: "180px",
+                              }}
+                            />
+                            <button
+                              className={styles.actionBtn}
+                              onClick={() =>
+                                handleEstimateSubmit(order.order_id)
+                              }
+                            >
+                              提交估价
+                            </button>
+                            <button
+                              className={`${styles.actionBtn} ${styles.danger}`}
+                              onClick={() => setEstimatingId(null)}
+                            >
+                              取消
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>

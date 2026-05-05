@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import MarkdownEditor from "../component/MarkdownEditor";
+import { AxiosError } from "axios";
 
 const DEFAULT_AVATAR = "/default-avatar.png";
 
@@ -38,6 +39,29 @@ function PostDetailPage() {
   const [newComment, setNewComment] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+
+  const handleUnlock = async () => {
+    if (!postId) return;
+    setIsUnlocking(true);
+    try {
+      const res = await api.post(`/posts/${postId}/unlock`);
+      if (res.data.success) {
+        // 解锁成功，刷新帖子详情（此时后端会返回完整内容）
+        await fetchPost();
+      } else {
+        alert(res.data.message || "解锁失败");
+      }
+    } catch (err: unknown) {
+      let msg = "解锁失败，请稍后重试";
+      if (err instanceof AxiosError) {
+        msg = err.response?.data?.message || msg;
+      }
+      alert(msg);
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
 
   const fetchPost = async () => {
     if (!postId) {
@@ -183,7 +207,24 @@ function PostDetailPage() {
                 </div>
 
                 {/* 若被锁定，在内容下方显示遮罩提示 */}
-                {post.content_locked && <LockedOverlay />}
+                {post.content_locked && (
+                  <>
+                    <LockedOverlay />
+                    {post.access_level === "points" && (
+                      <div style={{ textAlign: "center", marginTop: 16 }}>
+                        <button
+                          className={styles.primaryBtn}
+                          onClick={handleUnlock}
+                          disabled={isUnlocking}
+                        >
+                          {isUnlocking
+                            ? "解锁中..."
+                            : `🔓 花费 ${post.points_required} 积分解锁`}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </article>
 
               {/* 只有未锁定才显示回复模块 */}
@@ -193,7 +234,9 @@ function PostDetailPage() {
 
                   <div className={styles.floorList}>
                     {comments.length === 0 ? (
-                      <p className={styles.emptyText}>还没有回复，来抢沙发吧。</p>
+                      <p className={styles.emptyText}>
+                        还没有回复，来抢沙发吧。
+                      </p>
                     ) : (
                       comments.map((comment, index) => (
                         <article
@@ -207,7 +250,9 @@ function PostDetailPage() {
                                 className={styles.userLink}
                               >
                                 <img
-                                  src={comment.author_img_path || DEFAULT_AVATAR}
+                                  src={
+                                    comment.author_img_path || DEFAULT_AVATAR
+                                  }
                                   alt={`${comment.author_username} 的头像`}
                                   className={styles.avatar}
                                 />

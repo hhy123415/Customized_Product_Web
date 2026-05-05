@@ -5,6 +5,7 @@ import { useAuth } from "../hooks/useAuth";
 import api from "../api/axios";
 import axios from "axios";
 import styles from "../css/RewardShop.module.css";
+import { Link } from "react-router-dom";
 
 const RewardShop: React.FC = () => {
   const { auth } = useAuth();
@@ -93,6 +94,9 @@ const RewardShop: React.FC = () => {
   return (
     <div className={styles["reward-shop"]}>
       <h1>积分兑换</h1>
+      <Link to="/redemptions/history" className={styles["history-link"]}>
+        兑换记录
+      </Link>
       <p className={styles.points}>当前积分：{userPoints}</p>
 
       <div className={styles["reward-grid"]}>

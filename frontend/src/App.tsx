@@ -23,6 +23,7 @@ import AdminOrderQueryPage from "./pages/AdminOrderQuery";
 import UserOrderQueryPage from "./pages/UserOrderQuery";
 import RewardShop from "./pages/RewardShop";
 import PointsHistory from "./pages/PointsHistory";
+import RedemptionHistory from "./pages/RedemptionHistory";
 
 const AppContent = () => {
   const { auth } = useAuth();
@@ -143,6 +144,14 @@ const AppContent = () => {
           element={
             <UserRoute>
               <RewardShop />
+            </UserRoute>
+          }
+        />
+        <Route
+          path="/redemptions/history"
+          element={
+            <UserRoute>
+              <RedemptionHistory />
             </UserRoute>
           }
         />

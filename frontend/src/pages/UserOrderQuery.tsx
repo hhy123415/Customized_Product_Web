@@ -17,6 +17,8 @@ function UserOrderQueryPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionOrderId, setActionOrderId] = useState<string | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   const fetchOrders = async (keyword: string) => {
     setIsLoading(true);
@@ -68,7 +70,9 @@ function UserOrderQueryPage() {
 
       setOrders((currentOrders) =>
         currentOrders.map((order) =>
-          order.order_id === orderId ? { ...order, status: "cancelled" } : order,
+          order.order_id === orderId
+            ? { ...order, status: "cancelled" }
+            : order,
         ),
       );
     } catch (err) {
@@ -76,6 +80,45 @@ function UserOrderQueryPage() {
       alert("取消订单失败，请稍后再试");
     } finally {
       setActionOrderId(null);
+    }
+  };
+
+  const handleAcceptQuote = async (orderId: string) => {
+    setAcceptingId(orderId);
+    try {
+      const res = await api.patch(`/orders/${orderId}/accept-quote`);
+      if (res.data.success) {
+        setOrders((prev) =>
+          prev.map((o) => (o.order_id === orderId ? res.data.order : o)),
+        );
+      } else {
+        alert(res.data.message || "操作失败");
+      }
+    } catch (err) {
+      console.error("accept error", err);
+      alert("接受报价失败");
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
+  const handleRejectQuote = async (orderId: string) => {
+    if (!window.confirm("确定要拒绝该报价吗？订单将取消。")) return;
+    setRejectingId(orderId);
+    try {
+      const res = await api.patch(`/orders/${orderId}/reject-quote`);
+      if (res.data.success) {
+        setOrders((prev) =>
+          prev.map((o) => (o.order_id === orderId ? res.data.order : o)),
+        );
+      } else {
+        alert(res.data.message || "操作失败");
+      }
+    } catch (err) {
+      console.error("reject error", err);
+      alert("拒绝报价失败");
+    } finally {
+      setRejectingId(null);
     }
   };
 
@@ -118,8 +161,8 @@ function UserOrderQueryPage() {
         {!isLoading && !error && (
           <>
             <p className={styles.resultMeta}>
-              {activeKeyword ? `关键词 ${activeKeyword} | ` : ""}
-              共 {orders.length} 条结果
+              {activeKeyword ? `关键词 ${activeKeyword} | ` : ""}共{" "}
+              {orders.length} 条结果
             </p>
             <div className={styles.list}>
               {orders.length === 0 ? (
@@ -192,6 +235,28 @@ function UserOrderQueryPage() {
                             ￥{order.total_price.toFixed(2)}
                           </p>
                         )}
+
+                        {order.customization_mode === "freeform" &&
+                          order.total_price > 0 && (
+                            <div
+                              style={{
+                                background: "#eef6ff",
+                                padding: "10px",
+                                borderRadius: "6px",
+                                marginTop: "8px",
+                              }}
+                            >
+                              <p className={styles.meta}>
+                                <strong>商家报价:</strong> ￥
+                                {order.total_price.toFixed(2)}
+                              </p>
+                              {order.estimate_note && (
+                                <p className={styles.meta}>
+                                  <strong>备注:</strong> {order.estimate_note}
+                                </p>
+                              )}
+                            </div>
+                          )}
                       </div>
 
                       <p className={styles.meta}>
@@ -242,10 +307,12 @@ function UserOrderQueryPage() {
                         </p>
                       )}
                       <p className={styles.meta}>
-                        <strong>创建时间:</strong> {formatDate(order.created_at)}
+                        <strong>创建时间:</strong>{" "}
+                        {formatDate(order.created_at)}
                       </p>
                       <p className={styles.meta}>
-                        <strong>最后更新:</strong> {formatDate(order.updated_at)}
+                        <strong>最后更新:</strong>{" "}
+                        {formatDate(order.updated_at)}
                       </p>
 
                       {(order.status === "submitted" ||
@@ -259,6 +326,29 @@ function UserOrderQueryPage() {
                             {actionOrderId === order.order_id
                               ? "取消中..."
                               : "取消订单"}
+                          </button>
+                        </div>
+                      )}
+
+                      {order.status === "quoted" && (
+                        <div className={styles.statusActions}>
+                          <button
+                            className={styles.actionBtn}
+                            onClick={() => handleAcceptQuote(order.order_id)}
+                            disabled={acceptingId === order.order_id}
+                          >
+                            {acceptingId === order.order_id
+                              ? "处理中..."
+                              : "接受报价"}
+                          </button>
+                          <button
+                            className={`${styles.actionBtn} ${styles.danger}`}
+                            onClick={() => handleRejectQuote(order.order_id)}
+                            disabled={rejectingId === order.order_id}
+                          >
+                            {rejectingId === order.order_id
+                              ? "处理中..."
+                              : "拒绝报价"}
                           </button>
                         </div>
                       )}

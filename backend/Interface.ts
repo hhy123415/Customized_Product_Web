@@ -30,6 +30,8 @@ export interface AdminUserRow {
   role: Role;
   img_path?: string | null;
   bio?: string | null;
+  points?: number;
+  is_certified_designer: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +93,7 @@ export interface PostDetailRow {
   reply_count: number;
   access_level: string;
   preview_length: number;
+  points_required: number;
   created_at: string;
   updated_at: string;
   author_user_id: string;
@@ -127,6 +130,7 @@ export interface EmailVerificationCodeRow {
 export type PoolCueCustomizationMode = "preset" | "freeform";
 export type PoolCueOrderStatus =
   | "submitted"
+  | "quoted"        // 新增
   | "processing"
   | "shipped"
   | "completed"
@@ -202,4 +206,6 @@ export interface AdminOrderRow {
   status: PoolCueOrderStatus;
   created_at: string;
   updated_at: string;
+  estimate_note?: string | null;   // 新增
+  estimated_at?: string | null;    // 新增
 }

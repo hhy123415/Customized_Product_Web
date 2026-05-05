@@ -5,6 +5,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import api from "../api/axios";
 import styles from "../css/PoolCueCustomization.module.css";
 import { useAuth } from "../hooks/useAuth";
+import { AxiosError } from "axios";
 
 // ---------- 类型定义 ----------
 
@@ -19,7 +20,6 @@ type ShaftFlex = "medium" | "stiff";
 
 /** 表面处理/涂装风格 */
 type FinishStyle = "matte-carbon" | "satin-carbon" | "glacier-white";
-
 
 /** 完整的预设配置数据 */
 interface PaddleConfig {
@@ -71,6 +71,8 @@ interface PaddleModelParts {
 }
 
 // ---------- 常量配置 ----------
+
+const DEFAULT_2D_IMAGE_PATH = "/uploads/Carbon-Canoe-Paddle.jpg";
 
 /** 3D 模型加载路径与基础变换 */
 const MODEL_SOURCE = {
@@ -521,6 +523,7 @@ export default function CarbonPaddleCustomization() {
               contact_name: contactName,
               contact_phone: contactPhone,
               shipping_address: shippingAddress,
+              design_image_path: DEFAULT_2D_IMAGE_PATH,
               config,
             }
           : {
@@ -534,9 +537,13 @@ export default function CarbonPaddleCustomization() {
 
       await api.post("/orders/carbon-paddle", payload);
       alert("订单提交成功");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("submit carbon paddle order failed:", error);
-      alert("提交失败，请稍后重试");
+      if (error instanceof AxiosError) {
+        alert(error.response?.data?.message);
+      } else {
+        alert("订单提交失败，请重试");
+      }
     }
   };
 
@@ -544,7 +551,9 @@ export default function CarbonPaddleCustomization() {
    * 自由定制参考图上传：
    * 先显示本地预览，再将文件上传到后端并回填服务器路径。
    */
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -579,8 +588,6 @@ export default function CarbonPaddleCustomization() {
     } catch (error) {
       console.error("upload carbon paddle image failed:", error);
       alert("图片上传失败，请重试");
-    } finally {
-      event.target.value = "";
     }
   };
 
@@ -689,7 +696,6 @@ export default function CarbonPaddleCustomization() {
                   <option value="glacier-white">冰川白涂装 (+¥220)</option>
                 </select>
               </label>
-
             </div>
           ) : (
             <div className={styles.freeform}>

@@ -1,6 +1,6 @@
 const REWARDS_LIST = [
-  { id: "carbon-bottle", name: "碳纤维水壶", description: "500ml 轻量化碳纤维水壶", image: "/uploads/reward-bottle.png", pointsRequired: 2000 },
-  { id: "custom-grip", name: "握把套", description: "真皮握把", image: "/uploads/reward-grip.png", pointsRequired: 1200 },
+  { id: "carbon-bottle", name: "碳纤维水壶架", description: "适用500ml容量的轻量化碳纤维水壶架", image: "/reward-bottle.jpg", pointsRequired: 2000 },
+  { id: "custom-grip", name: "握把套", description: "真皮握把", image: "/reward-grip.webp", pointsRequired: 1200 },
 ];
 
 export interface RewardItem {

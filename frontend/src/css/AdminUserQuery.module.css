@@ -341,3 +341,250 @@
     flex-direction: column;
   }
 }
+
+/* ========== 新增：用户管理操作 ========== */
+
+/* 认证设计师徽章 */
+.certifiedBadge {
+  display: inline-block;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #78350f;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.3);
+}
+
+/* 积分数值加强 */
+.meta strong {
+  color: var(--color-primary-dark);
+  font-weight: var(--font-bold);
+}
+
+/* 卡片底部的操作区域 */
+.userActions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px dashed var(--color-gray-200);
+}
+
+/* 通用管理按钮 */
+.manageBtn {
+  flex: 1;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--color-white);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.15);
+}
+
+.manageBtn:hover:not(:disabled) {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(var(--color-primary-rgb), 0.25);
+}
+
+.manageBtn:disabled {
+  opacity: 0.6;
+  transform: none;
+  cursor: not-allowed;
+}
+
+/* 授予认证按钮 */
+.grantBtn {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+}
+
+.grantBtn:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.3);
+}
+
+/* 撤销认证按钮 */
+.revokeBtn {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+.revokeBtn:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3);
+}
+
+/* 搜索高亮 */
+mark {
+  background-color: #fde047;
+  color: #422006;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: var(--font-bold);
+}
+
+/* ========== 积分调整弹窗 ========== */
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modalContent {
+  background: var(--color-white);
+  padding: var(--space-8);
+  border-radius: var(--radius-2xl);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  min-width: 420px;
+  max-width: 520px;
+  width: 100%;
+  animation: slideUp 0.25s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.modalContent h3 {
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--color-gray-900);
+}
+
+.formGroup {
+  margin-bottom: var(--space-5);
+}
+
+.formGroup label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-weight: var(--font-medium);
+  color: var(--color-gray-700);
+  font-size: var(--text-sm);
+}
+
+.formInput,
+.formTextarea {
+  width: 100%;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-base);
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.formInput:focus,
+.formTextarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
+}
+
+.formTextarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.modalError {
+  display: block;
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  background: #fff1f2;
+  color: #be123c;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+}
+
+.modalSuccess {
+  display: block;
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  background: #ecfdf5;
+  color: #065f46;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+}
+
+.modalActions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  margin-top: var(--space-6);
+}
+
+.modalConfirmBtn {
+  padding: var(--space-3) var(--space-6);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: var(--color-white);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-bold);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.2);
+}
+
+.modalConfirmBtn:hover:not(:disabled) {
+  opacity: 0.95;
+  transform: translateY(-1px);
+}
+
+.modalConfirmBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modalCancelBtn {
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-white);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modalCancelBtn:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-300);
+}
+
+.statusQuoted {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+}

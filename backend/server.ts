@@ -189,7 +189,6 @@ const calculateCarbonPaddlePrice = (
   const lengthCm = Number(config?.lengthCm) || 220;
   const shaftFlex = String(config?.shaftFlex || "medium");
   const finishStyle = String(config?.finishStyle || "raw-carbon");
-  const accessoryPack = String(config?.accessoryPack || "none");
 
   const lines = [{ label: "基础碳纤维划船桨", amount: 2280 }];
   lines.push({
@@ -197,15 +196,10 @@ const calculateCarbonPaddlePrice = (
     amount: (lengthCm - 220) * 28,
   });
   if (shaftFlex === "stiff") {
-    lines.push({ label: "柔性桨杆调校", amount: 160 });
+    lines.push({ label: "高响应硬轴调校", amount: 160 });
   }
   if (finishStyle !== "raw-carbon") {
     lines.push({ label: "定制表面涂装", amount: 220 });
-  }
-  if (accessoryPack === "touring") {
-    lines.push({ label: "巡航收纳配件包", amount: 180 });
-  } else if (accessoryPack === "expedition") {
-    lines.push({ label: "远征配件包", amount: 360 });
   }
 
   return {
@@ -585,6 +579,25 @@ app.post(
     } catch (err) {
       const message = err instanceof Error ? err.message : "兑换失败";
       return res.status(400).json({ success: false, message });
+    }
+  },
+);
+
+app.get(
+  "/api/my_info/redemptions",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    if (!userId)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    try {
+      const redemptions = await db.getUserRedemptions(userId);
+      return res.json({ success: true, redemptions });
+    } catch (err) {
+      console.error("get redemptions error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
     }
   },
 );
@@ -983,6 +996,58 @@ app.patch(
   },
 );
 
+// 用户接受报价
+app.patch(
+  "/api/orders/:orderId/accept-quote",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const orderId = req.params.orderId as string;
+    if (!userId)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    try {
+      const order = await db.updateOrderStatus(orderId, "processing");
+      if (!order || order.user_id !== userId) {
+        return res.status(404).json({
+          success: false,
+          message: "订单不存在或无权操作",
+        });
+      }
+      return res.json({ success: true, order });
+    } catch (err) {
+      console.error("accept quote error:", err);
+      return res.status(500).json({ success: false, message: "服务器错误" });
+    }
+  },
+);
+
+// 用户拒绝报价
+app.patch(
+  "/api/orders/:orderId/reject-quote",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const orderId = req.params.orderId as string;
+    if (!userId)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    try {
+      const order = await db.updateOrderStatus(orderId, "cancelled");
+      if (!order || order.user_id !== userId) {
+        return res.status(404).json({
+          success: false,
+          message: "订单不存在或无权操作",
+        });
+      }
+      return res.json({ success: true, order });
+    } catch (err) {
+      console.error("reject quote error:", err);
+      return res.status(500).json({ success: false, message: "服务器错误" });
+    }
+  },
+);
+
 app.post(
   "/api/orders/pool-cue",
   authenticateToken,
@@ -1061,7 +1126,7 @@ app.post(
           configuration: config,
           pricingLines: pricing.lines,
           totalPrice: pricing.total,
-          designImagePath: null,
+          designImagePath: designImagePath || null,
           designDescription: null,
         };
       }
@@ -1166,7 +1231,7 @@ app.post(
           configuration: config || {},
           pricingLines: pricing.lines,
           totalPrice: pricing.total,
-          designImagePath: null,
+          designImagePath: designImagePath || null,
           designDescription: null,
         };
       }
@@ -1245,6 +1310,7 @@ app.patch(
     const { status } = req.body;
     const validStatuses = [
       "submitted",
+      "quoted", // 新增
       "processing",
       "shipped",
       "completed",
@@ -1267,6 +1333,147 @@ app.patch(
       return res
         .status(500)
         .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
+
+// 估价（自由定制）
+app.patch(
+  "/api/admin/orders/:orderId/estimate",
+  authenticateToken,
+  authenticateAdmin,
+  async (req: Request, res: Response) => {
+    const orderId = req.params.orderId as string;
+    const { total_price, pricing_lines, estimate_note } = req.body;
+
+    const totalPrice = Number(total_price);
+    if (!totalPrice || totalPrice <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "total_price 必须为正数",
+      });
+    }
+    const pricingLines = Array.isArray(pricing_lines) ? pricing_lines : [];
+    const note =
+      String(estimate_note || "")
+        .trim()
+        .slice(0, 500) || null;
+
+    try {
+      const order = await db.estimateOrder(
+        orderId,
+        totalPrice,
+        pricingLines,
+        note,
+      );
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: "订单不存在、不是自由定制或状态不允许估价",
+        });
+      }
+      return res.json({ success: true, order });
+    } catch (err) {
+      console.error("estimate error:", err);
+      return res.status(500).json({ success: false, message: "服务器错误" });
+    }
+  },
+);
+
+// 管理员调整用户积分
+app.post(
+  "/api/admin/users/:userId/points",
+  authenticateToken,
+  authenticateAdmin,
+  async (req: Request, res: Response) => {
+    const userId = String(req.params.userId);
+    const { points_change, detail } = req.body;
+
+    // 参数校验
+    const pointsChange = Number(points_change);
+    if (!Number.isInteger(pointsChange) || pointsChange === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "points_change 必须是非零整数",
+      });
+    }
+
+    const detailText =
+      String(detail || "").trim() ||
+      (pointsChange > 0 ? "管理员手动增加积分" : "管理员手动扣减积分");
+
+    if (detailText.length > 255) {
+      return res.status(400).json({
+        success: false,
+        message: "detail 长度超过限制（255字符）",
+      });
+    }
+
+    try {
+      const result = await db.adminAdjustUserPoints(
+        userId,
+        pointsChange,
+        detailText,
+      );
+
+      return res.json({
+        success: true,
+        message:
+          pointsChange > 0
+            ? `成功增加 ${pointsChange} 积分`
+            : `成功扣减 ${Math.abs(pointsChange)} 积分`,
+        user: result.user,
+        record: result.record,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "调整积分失败";
+      console.error("admin adjust user points error:", err);
+      return res.status(400).json({ success: false, message });
+    }
+  },
+);
+
+// 管理员切换用户设计师认证状态
+app.patch(
+  "/api/admin/users/:userId/certification",
+  authenticateToken,
+  authenticateAdmin,
+  async (req: Request, res: Response) => {
+    const userId = String(req.params.userId);
+    const { is_certified } = req.body;
+
+    if (typeof is_certified !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "is_certified 必须是布尔值",
+      });
+    }
+
+    try {
+      const user = await db.updateUserCertification(userId, is_certified);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "用户不存在",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: is_certified ? "已授予设计师认证" : "已撤销设计师认证",
+        user: {
+          user_id: user.user_id,
+          username: user.username,
+          is_certified_designer: is_certified,
+        },
+      });
+    } catch (err) {
+      console.error("admin update user certification error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "更新设计师认证失败",
+      });
     }
   },
 );
@@ -1375,6 +1582,9 @@ app.get(
         .json({ success: false, message: "postId is required" });
 
     const currentUser = req.user; // 包含 user_id, username, role
+    if (!currentUser?.user_id) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
     try {
       const post = await db.getPostDetailById(postId); // 返回新字段access_level
       if (!post)
@@ -1398,14 +1608,19 @@ app.get(
             );
           }
         } else if (post.access_level === "points") {
-          // 积分解锁：暂时没有解锁记录，全部锁住；未来可增加判断
-          // 即使是帖主/管理员，在 points 模式下也应能直接查看？根据业务，帖主/管理员理应可以看完整内容
           if (!isOwner && !isAdmin) {
-            contentLocked = true;
-            contentToReturn = truncateMarkdown(
-              post.content,
-              post.preview_length,
+            // 新增：检查是否已解锁
+            const hasUnlocked = await db.hasUserUnlockedPost(
+              currentUser?.user_id,
+              postId,
             );
+            if (!hasUnlocked) {
+              contentLocked = true;
+              contentToReturn = truncateMarkdown(
+                post.content,
+                post.preview_length,
+              );
+            }
           }
         }
       }
@@ -1462,9 +1677,19 @@ app.post(
 
       // 若帖子非公开且当前用户不是帖主或管理员，禁止评论
       if (post.access_level !== "public") {
-        const isOwner = req.user?.user_id === post.author_user_id;
+        const isOwner = userId === post.author_user_id;
         const isAdmin = req.user?.role === "admin";
-        if (!isOwner && !isAdmin) {
+        let canComment = isOwner || isAdmin;
+
+        if (!canComment && post.access_level === "points") {
+          // 检查是否已解锁
+          const hasUnlocked = await db.hasUserUnlockedPost(userId, postId);
+          if (hasUnlocked) {
+            canComment = true;
+          }
+        }
+
+        if (!canComment) {
           return res
             .status(403)
             .json({ success: false, message: "你没有权限评论此帖子" });
@@ -1484,6 +1709,59 @@ app.post(
       return res
         .status(500)
         .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
+
+app.post(
+  "/api/posts/:postId/unlock",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const userId = req.user?.user_id;
+    const postId = req.params.postId as string;
+
+    if (!userId || !postId) {
+      return res.status(400).json({ success: false, message: "请求无效" });
+    }
+
+    try {
+      // 1. 获取帖子信息
+      const post = await db.getPostDetailById(postId);
+      if (!post) {
+        return res.status(404).json({ success: false, message: "帖子不存在" });
+      }
+
+      // 2. 必须是积分解锁模式
+      if (post.access_level !== "points") {
+        return res
+          .status(400)
+          .json({ success: false, message: "该帖子不需要积分解锁" });
+      }
+
+      // 3. 帖主不能解锁自己的帖子
+      if (post.author_user_id === userId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "不能解锁自己的帖子" });
+      }
+
+      // 4. 执行解锁（含积分扣减与分成）
+      const result = await db.unlockPost(
+        userId,
+        postId,
+        post.points_required,
+        post.author_user_id,
+      );
+
+      return res.json({
+        success: true,
+        message: "解锁成功",
+        points_spent: result.points_spent,
+        current_points: result.unlockerPointsAfter,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "解锁失败";
+      return res.status(400).json({ success: false, message });
     }
   },
 );

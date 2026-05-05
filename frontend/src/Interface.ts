@@ -29,12 +29,14 @@ export interface CheckInStatus {
 type Role = "regular" | "admin";
 
 export interface AdminUser {
-  user_id: string;
+  user_id: number;
   username: string;
   email: string;
   role: Role;
   img_path?: string | null;
   bio?: string | null;
+  points?: number;
+  is_certified_designer: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -100,9 +102,11 @@ export interface AdminOrder {
   order_note: string | null;
   design_image_path: string | null;
   design_description: string | null;
-  status: "submitted" | "processing" | "shipped" | "completed" | "cancelled";
+  status: "submitted" | "quoted" | "processing" | "shipped" | "completed" | "cancelled";  // 增加 quoted
   created_at: string;
   updated_at: string;
+  estimate_note?: string; 
+  estimated_at?: string;
 }
 
 export interface PointRecordRow {

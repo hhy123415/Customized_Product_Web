@@ -6,6 +6,7 @@ export interface OrderConfiguration {
 
 export type OrderStatus =
   | "submitted"
+  | "quoted"
   | "processing"
   | "shipped"
   | "completed"
@@ -19,6 +20,7 @@ export const formatDate = (value: string) => {
 
 export const statusTextMap: Record<OrderStatus, string> = {
   submitted: "已提交",
+  quoted: "待确认报价",     
   processing: "处理中",
   shipped: "已发货",
   completed: "已完成",
@@ -27,6 +29,7 @@ export const statusTextMap: Record<OrderStatus, string> = {
 
 export const statusStyleMap: Record<OrderStatus, string> = {
   submitted: styles.statusSubmitted,
+  quoted: styles.statusQuoted, 
   processing: styles.statusProcessing,
   shipped: styles.statusShipped,
   completed: styles.statusCompleted,

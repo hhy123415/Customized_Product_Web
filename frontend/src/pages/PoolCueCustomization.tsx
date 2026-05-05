@@ -59,6 +59,8 @@ interface CueModelParts {
 // 配置常量 (Constants)
 // =================================================================
 
+const DEFAULT_IMAGE_PATH = "/uploads/preset_example.jpg";
+
 const MODEL_SOURCE = {
   url: "/models/cue-carbon.glb",
   baseRotation: [0, 0, -Math.PI / 2] as [number, number, number],
@@ -392,7 +394,7 @@ export default function PoolCueCustomization() {
         contact_phone: contactPhone,
         shipping_address: shippingAddress,
         ...(mode === "preset"
-          ? { config }
+          ? { design_image_path: DEFAULT_IMAGE_PATH, config }
           : {
               design_description: freeform.designDescription,
               design_image_path: freeform.referenceImagePath,

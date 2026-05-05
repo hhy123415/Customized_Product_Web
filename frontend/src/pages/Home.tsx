@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
 import {
   Users,
-  Sparkles,
-  LayoutGrid,
+  Archive,
   LogIn,
   LayoutDashboard,
   ClipboardList,  // 添加订单图标
@@ -62,7 +61,7 @@ function Home() {
                     size={20}
                     style={{ marginRight: "8px", verticalAlign: "middle" }}
                   />
-                  查询用户信息
+                  用户管理
                 </Link>
                 <Link
                   to="/admin/order-query"
@@ -90,24 +89,14 @@ function Home() {
                   我的订单
                 </Link>
                 <Link
-                  to="/CreativeSquare"
+                  to="/redemptions/history"
                   className={`${styles.menuBtn} ${styles.userTheme}`}
                 >
-                  <Sparkles
+                  <Archive
                     size={20}
                     style={{ marginRight: "8px", verticalAlign: "middle" }}
                   />
-                  创意广场
-                </Link>
-                <Link
-                  to="/product-customization"
-                  className={`${styles.menuBtn} ${styles.userTheme}`}
-                >
-                  <LayoutGrid
-                    size={20}
-                    style={{ marginRight: "8px", verticalAlign: "middle" }}
-                  />
-                  浏览产品定制示例
+                  兑换记录
                 </Link>
               </>
             )}
