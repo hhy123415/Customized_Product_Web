@@ -685,16 +685,48 @@ export const db = {
   },
 
   /** 获取所有帖子列表及其作者信息（按创建时间倒序） */
-  async getPostsWithAuthor(): Promise<PostRow[]> {
-    const result = await pool.query<PostRow>(`
-      SELECT
-        p.post_id, p.title, p.content, p.reply_count,p.access_level,  p.created_at, p.updated_at,
-        u.username AS author_username, u.role AS author_role, u.img_path AS author_img_path
-      FROM posts p
-      JOIN users u ON p.user_id = u.user_id
-      ORDER BY p.created_at DESC
-    `);
-    return result.rows;
+  async getPostsWithAuthor(params?: {
+    keyword?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ posts: PostRow[]; total: number }> {
+    const keyword = params?.keyword?.trim() || "";
+    const limit = params?.limit ?? 9;
+    const offset = params?.offset ?? 0;
+
+    let whereClause = "";
+    const queryParams: any[] = [];
+
+    if (keyword) {
+      whereClause = "WHERE (p.title ILIKE $1 )";
+      queryParams.push(`%${keyword}%`);
+    }
+
+    // 查询总数
+    const countSql = `SELECT COUNT(*) FROM posts p ${whereClause}`;
+    const countResult = await pool.query<{ count: string }>(
+      countSql,
+      queryParams,
+    );
+    const total = parseInt(countResult.rows[0]?.count || "0", 10);
+
+    // 查询分页数据
+    const dataParams = [...queryParams, limit, offset];
+    const dataSql = `
+    SELECT
+      p.post_id, p.title, p.content, p.reply_count, p.access_level,
+      p.created_at, p.updated_at,
+      u.username AS author_username, u.role AS author_role, u.img_path AS author_img_path
+    FROM posts p
+    JOIN users u ON p.user_id = u.user_id
+    ${whereClause}
+    ORDER BY p.created_at DESC
+    LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+  `;
+
+    const postsResult = await pool.query<PostRow>(dataSql, dataParams);
+
+    return { posts: postsResult.rows, total };
   },
 
   /** 查询最近一段时间内某个邮箱的验证码发送次数（用于频率限制） */

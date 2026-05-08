@@ -1,4 +1,4 @@
-/* CreativeSquare.css - 统一设计系统 */
+/* CreativeSquare.module.css - 统一设计系统 */
 
 /* 导入设计系统变量 */
 @import "./variables.css";
@@ -71,6 +71,98 @@
   font-size: var(--text-2xl);
   color: var(--color-gray-900);
   font-weight: var(--font-semibold);
+}
+
+/* ========== 新增：搜索栏样式 ========== */
+.searchForm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 200px;
+  border: 2px solid var(--color-gray-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-gray-800);
+  background: var(--color-white);
+  font-family: var(--font-family);
+  transition: all var(--transition-normal);
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.searchButton {
+  padding: var(--space-2) var(--space-5);
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-primary);
+  color: var(--color-white);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.searchButton::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.searchButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-primary);
+}
+
+.searchButton:hover:not(:disabled)::after {
+  left: 100%;
+}
+
+.clearButton {
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid var(--color-gray-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  color: var(--color-gray-700);
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.clearButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* ========== 分页容器留白（分页组件自带样式，此处仅调间距） ========== */
+.paginationWrapper {
+  margin-top: var(--space-8);
+  display: flex;
+  justify-content: center;
 }
 
 .createPostForm {
@@ -211,6 +303,7 @@
   overflow: hidden;
 }
 
+/* 顶部装饰条 hover 时显现（增强反馈） */
 .postCard::before {
   content: "";
   position: absolute;
@@ -221,6 +314,10 @@
   background: var(--gradient-primary);
   opacity: 0;
   transition: opacity var(--transition-normal);
+}
+
+.postCard:hover::before {
+  opacity: 1;
 }
 
 .postTitle {
@@ -374,6 +471,22 @@
     align-items: flex-start;
   }
 
+  /* 搜索栏在小屏下纵向堆叠 */
+  .searchForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchInput {
+    min-width: 0;
+  }
+
+  .searchButton,
+  .clearButton {
+    width: 100%;
+    text-align: center;
+  }
+
   .createPostForm {
     padding: var(--space-4);
     margin-bottom: var(--space-6);
@@ -400,7 +513,7 @@
   }
 
   .postCover {
-    width: 95%; /* 稍宽一点，但依然不撑满 */
+    width: 95%;
     border-radius: 6px;
   }
 }
@@ -455,8 +568,8 @@
   }
 
   .postCover {
-    width: 100%; /* 小屏全宽更易阅读 */
-    aspect-ratio: 4 / 3; /* 比例更高，显示更多纵向内容 */
+    width: 100%;
+    aspect-ratio: 4 / 3;
     border-radius: 6px;
   }
 }
@@ -475,14 +588,14 @@
 
 .postCover {
   display: block;
-  width: 60%; /* 不再强制撑满，留出呼吸空间 */
-  max-width: 100%; /* 防止内容溢出 */
-  aspect-ratio: 16 / 9; /* 高度由宽度自动计算，比例协调 */
-  object-fit: cover; /* 保持填充模式 */
-  object-position: center; /* 焦点居中 */
+  width: 60%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  object-position: center;
   border-radius: 8px;
-  margin: 0 auto 12px; /* 居中 + 下间距 */
-  background-color: #f3f4f6; /* 加载占位 */
+  margin: 0 auto 12px;
+  background-color: #f3f4f6;
   transition: transform 0.3s ease;
 }
 
@@ -490,7 +603,7 @@
   transform: scale(1.03);
 }
 
-/* ========== 访问控制选项样式 ========== */
+/* ========== 访问控制选项样式（发布页用，保留） ========== */
 .accessControlGroup {
   margin: 20px 0;
   padding: 16px;

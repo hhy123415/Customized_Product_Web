@@ -1484,8 +1484,27 @@ app.get(
   authenticateToken,
   async (req: Request, res: Response) => {
     try {
-      const posts = await db.getPostsWithAuthor();
-      res.json({ success: true, posts });
+      const keyword = (req.query.keyword as string) || "";
+      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 9));
+      const offset = (page - 1) * limit;
+
+      const { posts, total } = await db.getPostsWithAuthor({
+        keyword: keyword.trim(),
+        limit,
+        offset,
+      });
+
+      res.json({
+        success: true,
+        posts,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
     } catch (err) {
       console.error("posts 错误:", err);
       res.status(500).json({ success: false, message: "服务器内部错误" });

@@ -5,6 +5,7 @@ import api from "../api/axios";
 import styles from "../css/PoolCueCustomization.module.css";
 import { useAuth } from "../hooks/useAuth";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 
 // =================================================================
 // 类型定义 (Types)
@@ -73,17 +74,17 @@ const FINISH_STYLES: Record<
 > = {
   "matte-carbon": { color: "#3b424a", rough: 0.8, metal: 0.1 },
   "gloss-carbon": { color: "#222a30", rough: 0.1, metal: 0.4 },
-  "ocean-blue": { color: "#0055aa", rough: 0.2, metal: 0.2 },
+  "ocean-blue": { color: "#0055aa", rough: 0.2, metal: 0.3 },
 };
 
 /** 握把样式参数映射表 */
 const WRAP_STYLES: Record<
   WrapType,
-  { color: string; rough: number; metal: number; visible: boolean }
+  { color: string; rough: number; metal: number }
 > = {
-  "carbon-grip": { color: "#1a1a1a", rough: 0.7, metal: 0.1, visible: true },
-  "genuine-leather": { color: "#4a3225", rough: 0.9, metal: 0, visible: true },
-  none: { color: "#222", rough: 0.2, metal: 0.2, visible: true }, // 光把模式：通常与后把颜色接近但更光滑
+  "carbon-grip": { color: "#1a1a1a", rough: 0.7, metal: 0.1 },
+  "genuine-leather": { color: "#4a3225", rough: 0.9, metal: 0 },
+  none: { color: "#222", rough: 0.2, metal: 0.2 }, // 光把模式：通常与后把颜色接近但更光滑
 };
 
 const INITIAL_CONFIG: CueConfig = {
@@ -272,13 +273,28 @@ export default function PoolCueCustomization() {
 
     // 2. 环境光照
     scene.add(
-      new THREE.AmbientLight(0xffffff, 0.8),
+      new THREE.AmbientLight(0xffffff, 0.4),
       new THREE.DirectionalLight(0xffffff, 1),
     );
 
     const cueGroup = new THREE.Group();
     cueGroup.rotation.set(...MODEL_SOURCE.baseRotation);
     scene.add(cueGroup);
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+
+    new RGBELoader()
+      .setDataType(THREE.HalfFloatType)
+      .load("/environment.hdr", (texture) => {
+        const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+        scene.environment = envMap;
+        scene.background = envMap;
+        texture.dispose();
+        pmremGenerator.dispose();
+        // 环境贴图就绪后立即渲染一帧
+        renderer.render(scene, camera);
+      });
 
     sceneElements.current = { renderer, scene, camera, controls };
 
@@ -329,6 +345,8 @@ export default function PoolCueCustomization() {
       partsRef.current = null;
       sceneElements.current = null;
       mount.removeChild(renderer.domElement);
+      if (scene.environment) scene.environment.dispose();
+      if (scene.background === scene.environment) scene.background = null;
     };
   }, [mode]);
 
@@ -362,9 +380,9 @@ export default function PoolCueCustomization() {
     setPartStyle(p.shaft, finish);
     setPartStyle(p.butt, finish);
 
-    // C. 更新握把材质 (支持三种选项)
+    // C. 更新握把材质
     const wrap = WRAP_STYLES[config.wrapType];
-    setPartStyle(p.grip, wrap, wrap.visible);
+    setPartStyle(p.grip, wrap);
 
     // D. 更新接牙材质
     const jointColor = config.jointType === "titanium" ? "#99ccaa" : "#bb88bb";

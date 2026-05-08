@@ -6,6 +6,7 @@ import api from "../api/axios";
 import styles from "../css/PoolCueCustomization.module.css";
 import { useAuth } from "../hooks/useAuth";
 import { AxiosError } from "axios";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 
 // ---------- 类型定义 ----------
 
@@ -303,7 +304,7 @@ export default function CarbonPaddleCustomization() {
 
     // 基础光源
     scene.add(
-      new THREE.AmbientLight(0xffffff, 0.8),
+      new THREE.AmbientLight(0xffffff, 0.4),
       new THREE.DirectionalLight(0xffffff, 1),
     );
 
@@ -311,6 +312,19 @@ export default function CarbonPaddleCustomization() {
     const paddleGroup = new THREE.Group();
     paddleGroup.rotation.set(...MODEL_SOURCE.baseRotation);
     scene.add(paddleGroup);
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+
+    new RGBELoader()
+      .setDataType(THREE.HalfFloatType) // 推荐使用半浮点精度
+      .load("/environment.hdr", (texture) => {
+        const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+        scene.environment = envMap;
+        scene.background = envMap; // 也可用一个模糊版本或纯色
+        texture.dispose(); // 释放原始 HDR 数据
+        pmremGenerator.dispose();
+      });
 
     // 保存场景对象引用
     sceneElements.current = { renderer, scene, camera, controls };
@@ -367,6 +381,8 @@ export default function CarbonPaddleCustomization() {
       partsRef.current = null;
       sceneElements.current = null;
       mount.removeChild(renderer.domElement);
+      if (scene.environment) scene.environment.dispose();
+      if (scene.background === scene.environment) scene.background = null;
     };
   }, [mode]);
 
